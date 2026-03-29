@@ -1,0 +1,49 @@
+# Visual Studio
+.vs/
+bin/*
+obj/*
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+TestResults/
+
+# Build outputs
+**/bin/
+**/obj/
+
+# Logs
+logs/
+
+# NuGet
+*.nupkg
+.nuget/
+packages/
+**/packages/*
+# !**/packages/build/
+
+# Rider
+.idea/
+
+# Misc
+Thumbs.db
+Desktop.ini
+*.log
+
+# -----------自定义-------------
+
+# 过程稿
+作废-06：Verify
+作废-LicenseServer.ps1
+
+# 排除多余
+pocketbase/*
+# 保留
+!pocketbase/pocketbase.exe
+!pocketbase/LICENSE.md
+!pocketbase/pb_data/
+
+# 排除多余
+pocketbase/pb_data/*
+# 保留
+!pocketbase/pb_data/data.db
