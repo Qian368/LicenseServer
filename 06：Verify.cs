@@ -281,6 +281,21 @@ namespace LicenseServer
                 // 空值/解析失败的设备排到最后（用最小时间值）
                 return DateTime.MinValue;
             }).ToList();
+
+            // 新增设备时，将本机设备插入到排序列表的最前面（最新激活）
+            if (analysisResult.NeedAddDevice)
+            {
+                // 构造本机新增设备的JToken（包含遍历所需的核心字段）
+                JObject newLocalDevice = new JObject
+                {
+                    ["computer_name"] = rawData.ComputerName, // 本机名称
+                    ["machine_id"] = rawData.MachineId,       // 本机机器码
+                    ["updated"] = DateTime.UtcNow.ToString("yyyy-MM-ddTHH:mm:ss.fffZ") // 最新更新时间（确保排第一）
+                };
+                // 插入到列表头部（优先级最高）
+                sortedDeviceList.Insert(0, newLocalDevice);
+            }
+
             // 遍历排序后的列表
             foreach (JToken device in sortedDeviceList) // 改为遍历排序后的列表
             {

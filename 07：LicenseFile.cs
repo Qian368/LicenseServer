@@ -39,7 +39,7 @@ namespace LicenseServer
             /// <summary>授权文件签名（防止篡改）</summary>
             public string Signature { get; set; } = "";
             /// <summary>许可证绑定的所有设备名（逗号分隔）</summary>
-            public string RelatedDeviceNames { get; set; } = ""; // 新增：关联设备名
+            public string RelatedDeviceNames { get; set; } = "";
         }
 
         /// <summary>
@@ -48,32 +48,120 @@ namespace LicenseServer
         private string LocalLicenseFilePath => Path.Combine(_scriptDir, "license.lic");
 
         /// <summary>
-        /// 签名密钥（自定义，建议替换为随机32位字符串，防止授权文件被篡改）
-        /// </summary>
-        // private readonly string _licenseSignKey = "YourRandom32BitSignKey12345678"; // 需替换！
-        private readonly string _licenseSignKey = "nY2LpD4qW9vSxqianyueduGzR6XwZyP5V"; // 已替换
-        /// <summary>
-        /// AES加密密钥（需替换为自定义32位字符串，AES-256要求密钥32字节）
-        /// </summary>
-        private readonly string _aesEncryptKey = "B3A5D2E7C4F1qianyuedu0F3E2D5A8C9"; // 必须32位
-
-        /// <summary>
         /// 定期强制远程校验周期（天），避免本地文件永久有效
         /// </summary>
         private readonly int _forceRemoteCheckDays = 7;
+
+        #region 新增：动态密钥生成（基于机器码）
+        /// <summary>
+        /// 基于机器码生成固定的签名密钥（32位）
+        /// </summary>
+        /// <param name="machineId">设备唯一机器码</param>
+        /// <returns>32位签名密钥</returns>
+        private string GenerateSignKeyFromMachineId(string machineId)
+        {
+            using (SHA256 sha256 = SHA256.Create())
+            {
+                // 机器码 + 固定盐值（轻量混淆，可自定义）
+                string saltedMachineId = $"{machineId}_License_Saltqianyuedu1";
+                byte[] hashBytes = sha256.ComputeHash(Encoding.UTF8.GetBytes(saltedMachineId));
+                // 截取32位作为签名密钥
+                return BitConverter.ToString(hashBytes).Replace("-", "").ToLower().Substring(0, 32);
+            }
+        }
+
+        /// <summary>
+        /// 基于机器码生成固定的AES加密密钥（32位，满足AES-256要求）
+        /// </summary>
+        /// <param name="machineId">设备唯一机器码</param>
+        /// <returns>32位AES密钥</returns>
+        private string GenerateAesKeyFromMachineId(string machineId)
+        {
+            using (HMACSHA256 hmac = new HMACSHA256(Encoding.UTF8.GetBytes("AES_Saltqianyuedu3456789")))
+            {
+                byte[] hashBytes = hmac.ComputeHash(Encoding.UTF8.GetBytes(machineId));
+                // 截取32位作为AES密钥
+                return BitConverter.ToString(hashBytes).Replace("-", "").ToLower().Substring(0, 32);
+            }
+        }
+
+        /// <summary>
+        /// 基于AES密钥生成固定IV（16位，AES要求）
+        /// </summary>
+        /// <param name="aesKey">32位AES密钥</param>
+        /// <returns>16位IV</returns>
+        private byte[] GenerateAesIV(string aesKey)
+        {
+            using (MD5 md5 = MD5.Create())
+            {
+                byte[] ivBytes = md5.ComputeHash(Encoding.UTF8.GetBytes(aesKey));
+                return ivBytes.Take(16).ToArray(); // IV固定16位
+            }
+        }
+        #endregion
+
+        #region 新增：个性化字符移位处理（增强破解难度）
+        /// <summary>
+        /// 加密前的自定义字符移位（每个字符ASCII码+5，循环处理）
+        /// </summary>
+        /// <param name="plainText">原始明文</param>
+        /// <returns>移位后的字符串</returns>
+        private string CustomCharShiftEncrypt(string plainText)
+        {
+            StringBuilder sb = new StringBuilder();
+            foreach (char c in plainText)
+            {
+                // 只处理可见字符（ASCII 32-126），其余不变
+                if (c >= 32 && c <= 126)
+                {
+                    sb.Append((char)((c - 32 + 5) % 95 + 32));
+                }
+                else
+                {
+                    sb.Append(c);
+                }
+            }
+            return sb.ToString();
+        }
+
+        /// <summary>
+        /// 解密后的自定义字符移位（反向：每个字符ASCII码-5）
+        /// </summary>
+        /// <param name="shiftedText">移位后的字符串</param>
+        /// <returns>原始明文</returns>
+        private string CustomCharShiftDecrypt(string shiftedText)
+        {
+            StringBuilder sb = new StringBuilder();
+            foreach (char c in shiftedText)
+            {
+                if (c >= 32 && c <= 126)
+                {
+                    sb.Append((char)((c - 32 - 5 + 95) % 95 + 32));
+                }
+                else
+                {
+                    sb.Append(c);
+                }
+            }
+            return sb.ToString();
+        }
+        #endregion
 
         /// <summary>
         /// 生成授权文件签名（防止篡改）
         /// </summary>
         /// <param name="model">授权文件模型（排除Signature字段）</param>
+        /// <param name="machineId">机器码（用于生成签名密钥）</param>
         /// <returns>签名字符串</returns>
-        private string GenerateLicenseSignature(LicenseFileModel model)
+        private string GenerateLicenseSignature(LicenseFileModel model, string machineId)
         {
             try
             {
-                // 拼接待签名的原始字符串（新增 RelatedDeviceNames 字段）
+                // 拼接待签名的原始字符串
                 string rawData = $"{model.LicenseKey}|{model.MachineId}|{model.ExpiresAt}|{model.MaxDevices}|{model.CurrentDevices}|{model.LastRemoteVerifyTime:yyyy-MM-dd HH:mm:ss}|{model.RelatedDeviceNames}";
-                using (HMACSHA256 hmac = new HMACSHA256(Encoding.UTF8.GetBytes(_licenseSignKey)))
+                // 动态生成签名密钥（不再硬编码）
+                string signKey = GenerateSignKeyFromMachineId(machineId);
+                using (HMACSHA256 hmac = new HMACSHA256(Encoding.UTF8.GetBytes(signKey)))
                 {
                     byte[] hashBytes = hmac.ComputeHash(Encoding.UTF8.GetBytes(rawData));
                     return BitConverter.ToString(hashBytes).Replace("-", "").ToLower();
@@ -90,30 +178,47 @@ namespace LicenseServer
         /// 验证授权文件签名是否有效
         /// </summary>
         /// <param name="model">授权文件模型</param>
+        /// <param name="machineId">机器码</param>
         /// <returns>是否有效</returns>
-        private bool VerifyLicenseSignature(LicenseFileModel model)
+        private bool VerifyLicenseSignature(LicenseFileModel model, string machineId)
         {
-            string expectedSign = GenerateLicenseSignature(model);
+            string expectedSign = GenerateLicenseSignature(model, machineId);
             return model.Signature == expectedSign;
         }
 
-        // 示例AES加密（需新增AES工具方法）
-        // 修改 EncryptAes 方法
-        string EncryptAes(string plainText, string key)
+        #region 修改：增强版AES加解密（个性化逻辑+动态密钥/IV）
+        /// <summary>
+        /// 增强版AES加密（自定义字符移位 + AES加密）
+        /// </summary>
+        /// <param name="plainText">原始明文</param>
+        /// <param name="machineId">机器码（用于生成AES密钥）</param>
+        /// <returns>加密后字符串</returns>
+        string EncryptAesEnhanced(string plainText, string machineId)
         {
             try
             {
+                // 步骤1：自定义字符移位（第一层混淆）
+                string shiftedText = CustomCharShiftEncrypt(plainText);
+
+                // 步骤2：动态生成AES密钥和IV（不再硬编码IV）
+                string aesKey = GenerateAesKeyFromMachineId(machineId);
+                byte[] keyBytes = Encoding.UTF8.GetBytes(aesKey);
+                byte[] ivBytes = GenerateAesIV(aesKey);
+
                 using (Aes aes = Aes.Create())
                 {
-                    aes.Key = Encoding.UTF8.GetBytes(key.PadRight(32).Substring(0, 32));
-                    aes.IV = new byte[16];
+                    aes.Key = keyBytes;
+                    aes.IV = ivBytes;
+                    aes.Mode = CipherMode.CBC; // 改用CBC模式（比ECB更安全）
+                    aes.Padding = PaddingMode.PKCS7;
+
                     ICryptoTransform encryptor = aes.CreateEncryptor(aes.Key, aes.IV);
                     using (MemoryStream ms = new MemoryStream())
                     {
                         using (CryptoStream cs = new CryptoStream(ms, encryptor, CryptoStreamMode.Write))
                         using (StreamWriter sw = new StreamWriter(cs))
                         {
-                            sw.Write(plainText);
+                            sw.Write(shiftedText);
                         }
                         return Convert.ToBase64String(ms.ToArray());
                     }
@@ -122,25 +227,40 @@ namespace LicenseServer
             catch (Exception ex)
             {
                 WriteColor($"AES加密失败：{ex.Message}", ConsoleColor.Red);
-                throw; // 抛出异常让上层处理
+                throw;
             }
         }
 
-        // 修改 DecryptAes 方法
-        string DecryptAes(string cipherText, string key)
+        /// <summary>
+        /// 增强版AES解密（AES解密 + 自定义字符移位还原）
+        /// </summary>
+        /// <param name="cipherText">加密后字符串</param>
+        /// <param name="machineId">机器码（用于生成AES密钥）</param>
+        /// <returns>原始明文</returns>
+        string DecryptAesEnhanced(string cipherText, string machineId)
         {
             try
             {
+                // 步骤1：动态生成AES密钥和IV
+                string aesKey = GenerateAesKeyFromMachineId(machineId);
+                byte[] keyBytes = Encoding.UTF8.GetBytes(aesKey);
+                byte[] ivBytes = GenerateAesIV(aesKey);
+
                 using (Aes aes = Aes.Create())
                 {
-                    aes.Key = Encoding.UTF8.GetBytes(key.PadRight(32).Substring(0, 32));
-                    aes.IV = new byte[16];
+                    aes.Key = keyBytes;
+                    aes.IV = ivBytes;
+                    aes.Mode = CipherMode.CBC;
+                    aes.Padding = PaddingMode.PKCS7;
+
                     ICryptoTransform decryptor = aes.CreateDecryptor(aes.Key, aes.IV);
                     using (MemoryStream ms = new MemoryStream(Convert.FromBase64String(cipherText)))
                     using (CryptoStream cs = new CryptoStream(ms, decryptor, CryptoStreamMode.Read))
                     using (StreamReader sr = new StreamReader(cs))
                     {
-                        return sr.ReadToEnd();
+                        // 步骤2：AES解密后，还原字符移位
+                        string shiftedText = sr.ReadToEnd();
+                        return CustomCharShiftDecrypt(shiftedText);
                     }
                 }
             }
@@ -150,6 +270,7 @@ namespace LicenseServer
                 throw;
             }
         }
+        #endregion
 
         /// <summary>
         /// 生成本地授权文件（远程验证成功后调用）
@@ -159,13 +280,13 @@ namespace LicenseServer
         /// <param name="expiresAt">有效期</param>
         /// <param name="maxDevices">最大设备数</param>
         /// <param name="currentDevices">当前设备数</param>
-        /// <param name="relatedDeviceNames">关联设备名（逗号分隔）</param> // 新增参数
+        /// <param name="relatedDeviceNames">关联设备名（逗号分隔）</param>
         /// <returns>是否成功</returns>
         private bool GenerateLicenseFile(string licenseKey, string machineId, string expiresAt, int maxDevices, int currentDevices, string relatedDeviceNames)
         {
             try
             {
-                // 构建授权模型（新增 RelatedDeviceNames 赋值）
+                // 构建授权模型
                 LicenseFileModel model = new LicenseFileModel
                 {
                     LicenseKey = licenseKey,
@@ -174,14 +295,14 @@ namespace LicenseServer
                     MaxDevices = maxDevices,
                     CurrentDevices = currentDevices,
                     LastRemoteVerifyTime = DateTime.Now,
-                    RelatedDeviceNames = relatedDeviceNames // 赋值关联设备名
+                    RelatedDeviceNames = relatedDeviceNames
                 };
-                // 生成签名
-                model.Signature = GenerateLicenseSignature(model);
+                // 生成签名（传入机器码，动态生成签名密钥）
+                model.Signature = GenerateLicenseSignature(model, machineId);
 
-                // 序列化 + 加密
+                // 序列化 + 增强版AES加密（不再用硬编码密钥）
                 string jsonModel = JsonConvert.SerializeObject(model);
-                string encryptContent = EncryptAes(jsonModel, _aesEncryptKey);
+                string encryptContent = EncryptAesEnhanced(jsonModel, machineId);
 
                 // 写入文件
                 File.WriteAllText(LocalLicenseFilePath, encryptContent, Encoding.UTF8);
@@ -209,18 +330,15 @@ namespace LicenseServer
 
             try
             {
-                /* // 2. 读取并解密文件
+                // 2. 读取并增强版AES解密（动态密钥）
                 string encryptStr = File.ReadAllText(LocalLicenseFilePath, Encoding.UTF8);
-                string jsonStr = Encoding.UTF8.GetString(Convert.FromBase64String(encryptStr)); */
-                // 2. 读取并AES解密文件
-                string encryptStr = File.ReadAllText(LocalLicenseFilePath, Encoding.UTF8);
-                string jsonStr = DecryptAes(encryptStr, _aesEncryptKey); // 调用AES解密
+                string jsonStr = DecryptAesEnhanced(encryptStr, machineId);
                 LicenseFileModel model = JsonConvert.DeserializeObject<LicenseFileModel>(jsonStr)!;
 
-                // 3. 验证签名（防止篡改）
-                if (!VerifyLicenseSignature(model))
+                // 3. 验证签名（动态密钥）
+                if (!VerifyLicenseSignature(model, machineId))
                 {
-                    File.Delete(LocalLicenseFilePath); // 篡改文件直接删除
+                    File.Delete(LocalLicenseFilePath);
                     return (false, "本地授权文件已被篡改，无效");
                 }
 
@@ -236,19 +354,19 @@ namespace LicenseServer
                     DateTime expiresTimeUtc = DateTime.Parse(model.ExpiresAt).ToUniversalTime();
                     if (expiresTimeUtc < DateTime.UtcNow)
                     {
-                        File.Delete(LocalLicenseFilePath); // 过期文件直接删除
+                        File.Delete(LocalLicenseFilePath);
                         return (false, "本地授权文件已过期");
                     }
                 }
 
-                // 6. 检查是否需要强制远程校验（超过周期）
+                // 6. 检查是否需要强制远程校验
                 TimeSpan lastCheckSpan = DateTime.Now - model.LastRemoteVerifyTime;
                 if (lastCheckSpan.TotalDays > _forceRemoteCheckDays)
                 {
                     return (false, $"本地授权文件已超过{_forceRemoteCheckDays}天未远程校验，需重新验证");
                 }
 
-                // 7. 验证通过，拼接成功消息
+                // 7. 验证通过
                 string successMsg = $"验证通过！\n" +
                         $"许可证key：{model.LicenseKey}\n" +
                         $"机器码：{model.MachineId}\n" +
@@ -260,17 +378,18 @@ namespace LicenseServer
             }
             catch (Exception ex)
             {
-                File.Delete(LocalLicenseFilePath); // 解析失败删除无效文件
+                File.Delete(LocalLicenseFilePath);
                 return (false, $"本地授权文件解析失败：{ex.Message}");
             }
         }
         #endregion
 
         /// <summary>
-        /// 读取本地授权文件中的扩展信息（许可证key、关联设备名等）
+        /// 读取本地授权文件中的扩展信息
         /// </summary>
+        /// <param name="machineId">本机机器码</param>
         /// <returns>授权信息模型 / 失败返回null</returns>
-        private LicenseFileModel? ReadLicenseFileInfo()         // 备用方法
+        private LicenseFileModel? ReadLicenseFileInfo(string machineId)
         {
             try
             {
@@ -278,13 +397,13 @@ namespace LicenseServer
                 {
                     return null;
                 }
-                // 解密 + 反序列化
+                // 增强版解密 + 反序列化
                 string encryptContent = File.ReadAllText(LocalLicenseFilePath, Encoding.UTF8);
-                string jsonModel = DecryptAes(encryptContent, _aesEncryptKey);
+                string jsonModel = DecryptAesEnhanced(encryptContent, machineId);
                 LicenseFileModel model = JsonConvert.DeserializeObject<LicenseFileModel>(jsonModel)!;
 
-                // 验证签名（防止篡改）
-                if (!VerifyLicenseSignature(model))
+                // 验证签名
+                if (!VerifyLicenseSignature(model, machineId))
                 {
                     WriteColor("授权文件已被篡改", ConsoleColor.Red);
                     return null;
@@ -297,6 +416,5 @@ namespace LicenseServer
                 return null;
             }
         }
-
     }
 }
