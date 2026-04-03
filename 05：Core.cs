@@ -118,7 +118,7 @@ namespace LicenseServer
             return (true, "服务未运行，无需停止");
         }
 
-        private (bool Success, string? MachineId, string Msg) GetMachineId()
+        internal (bool Success, string? MachineId, string Msg) GetMachineId()
         // 从硬件信息生成机器码
         {
             try
@@ -238,73 +238,59 @@ namespace LicenseServer
             }
         }
 
+        #endregion
 
-
-        // 公共验证弹窗方法：主窗口能调用，后端也能直接静默调用展示；实例子类inputForm，不与主窗口共享隐藏属性
-        public (bool Success, string Msg) ShowVerifyDialog()
+        // ====== 新增：管道模式验证处理方法（完整实现） ======
+        /// <summary>
+        /// 处理匿名管道模式的许可证验证（仅verify，复用原有所有逻辑）
+        /// </summary>
+        private void HandlePipeVerifyMode()
         {
-            Form inputForm = new Form
+            try
             {
-                Text = "验证许可证",
-                Size = new Size(300, 150),
-                StartPosition = FormStartPosition.CenterScreen,
-                FormBorderStyle = FormBorderStyle.FixedDialog,
-                MaximizeBox = false,
-                MinimizeBox = false
-            };
+                // 1. 强制隐藏窗体（管道模式无界面，静默运行）
+                this.Visible = false;
+                this.ShowInTaskbar = false;
+                this.Opacity = 0;
+                this.WindowState = FormWindowState.Minimized;
 
-            Label label = new Label { Text = "请输入许可证密钥：", Location = new Point(10, 20), AutoSize = true };
-            TextBox textBox = new TextBox { Location = new Point(10, 50), Width = 260 };
-            Button okBtn = new Button { Text = "确定", Location = new Point(65, 85), DialogResult = DialogResult.OK };
-            Button cancelBtn = new Button { Text = "取消", Location = new Point(150, 85), DialogResult = DialogResult.Cancel };
+                // 2. 从匿名管道读取 主进程发送的验证请求(JSON)
+                var verifyRequest = PipeCommunication.ReadVerifyRequest(_pipeReader);
 
-            inputForm.Controls.Add(label);
-            inputForm.Controls.Add(textBox);
-            inputForm.Controls.Add(okBtn);
-            inputForm.Controls.Add(cancelBtn);
-            inputForm.AcceptButton = okBtn;
-            inputForm.CancelButton = cancelBtn;
+                // 3. 核心：调用管道通信类，复用原有本地/远程验证逻辑
+                var verifyResponse = PipeCommunication.HandlePipeVerify(this, verifyRequest);
 
-            // ========== 新增：优先校验本地授权文件 ==========
-            var machineResult = GetMachineId();
-            if (machineResult.Success && !string.IsNullOrEmpty(machineResult.MachineId))
-            {
-                var localVerifyResult = VerifyLocalLicenseFile(machineResult.MachineId);
-                if (localVerifyResult.Success)
-                {
-                    return localVerifyResult; // 本地验证通过，直接返回
-                }
-                WriteColor($"本地授权校验失败：{localVerifyResult.Msg}，将进行远程验证", ConsoleColor.Yellow);
+                // 4. 将验证结果写回匿名管道，返回给主进程
+                PipeCommunication.WriteVerifyResponse(_pipeWriter, verifyResponse);
+
+                // 5. 验证完成，停止服务并退出程序
+                StopServer();
+                Environment.Exit(verifyResponse.Success ? 0 : 1);
             }
+            catch (Exception ex)
+            {
+                // 异常处理：生成错误响应，写回管道
+                var errorResponse = new PipeCommunication.VerifyResponse
+                {
+                    Success = false,
+                    Msg = $"管道验证异常：{ex.Message}",
+                    // MachineId = null
+                };
 
-            if (inputForm.ShowDialog() == DialogResult.OK && !string.IsNullOrEmpty(textBox.Text))
-            {
-                if (_verifyType == "remote")
-                {
-                    // 远程验证逻辑（不启动本地服务，直接调用远程API）
-                    (bool Success, string Msg) verifyRes;
-                    var machineResult2 = GetMachineId();
-                    if (!machineResult2.Success || string.IsNullOrEmpty(machineResult2.MachineId))
-                    {
-                        verifyRes = (false, machineResult2.Msg);
-                    }
-                    else
-                    {
-                        verifyRes = RemoteVerifyLicense(textBox.Text, machineResult2.MachineId);
-                    }
-                    return verifyRes;
-                }
-                else
-                {
-                    return VerifyLicense(textBox.Text);
-                }
+                // 写入异常结果
+                PipeCommunication.WriteVerifyResponse(_pipeWriter, errorResponse);
+
+                // 停止服务并退出
+                StopServer();
+                Environment.Exit(1);
             }
-            else
+            finally
             {
-                return (false, "已取消验证");
+                // 释放管道流资源（安全兜底）
+                _pipeReader?.Dispose();
+                _pipeWriter?.Dispose();
             }
         }
-
 
 
         /// <summary>
@@ -350,8 +336,6 @@ namespace LicenseServer
                 _ApiUrl = oldApiUrl;        // 恢复全局地址
             }
         }
-
-        #endregion
 
     }
 }

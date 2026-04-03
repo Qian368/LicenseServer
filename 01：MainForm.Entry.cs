@@ -13,6 +13,7 @@ using System.Threading;
 using System.Windows.Forms;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
+using System.IO.Pipes;
 
 namespace LicenseServer
 {
@@ -36,6 +37,26 @@ namespace LicenseServer
 
             MainForm form = new MainForm();
 
+            // ====== 新增：解析管道模式参数 ======
+            for (int i = 0; i < args.Length; i++)
+            {
+                if (args[i].ToLower() == "-pipemode" || args[i].ToLower() == "/pipemode")   // 解析管道模式指令
+                {
+                    form._isPipeMode = true;
+                    // 👇 替换原有代码：使用主进程传递的管道句柄创建流（更稳定）
+                    string pipeReadHandle = args[i + 1];  // 读句柄
+                    string pipeWriteHandle = args[i + 2]; // 写句柄
+                    form._pipeReader = new StreamReader(
+                        new AnonymousPipeClientStream(PipeDirection.In, pipeReadHandle),
+                        Encoding.UTF8);
+                    form._pipeWriter = new StreamWriter(
+                        new AnonymousPipeClientStream(PipeDirection.Out, pipeWriteHandle),
+                        Encoding.UTF8);
+                    form._pipeWriter.AutoFlush = true;
+                    i += 2; // 跳过管道句柄参数
+                    break;
+                }
+            }
 
             // 解析命令行参数
             for (int i = 0; i < args.Length; i++)
@@ -95,16 +116,27 @@ namespace LicenseServer
                     case "/silentmode":
                         form.silentMode = true;
                         // 解析到参数后，直接设置窗口隐藏属性
-                        form.ShowInTaskbar = false;
-                        form.WindowState = FormWindowState.Minimized;
                         form.Visible = false;
+                        form.ShowInTaskbar = false;
                         form.Opacity = 0;
+                        form.WindowState = FormWindowState.Minimized;
                         break;
                 }
             }
 
+
+            // 程序退出码：0-成功，1-失败，2-未知错误
+            int exitCode = 1;
             try
             {
+
+                // ====== 新增：管道模式处理（仅处理verify） ======
+                if (form._isPipeMode)
+                {
+                    form.HandlePipeVerifyMode(); // 处理管道验证
+                    return; // 管道模式执行完直接退出，不走原有CLI逻辑
+                }
+
                 if (form._action == "交互模式")
                 {
                     Application.Run(form);
@@ -116,127 +148,86 @@ namespace LicenseServer
                     case "start":
                         var startRes = form.StartServer();
                         form.WriteColor(startRes.Msg, startRes.Success ? ConsoleColor.Green : ConsoleColor.Red);
+                        if (!startRes.Success)
+                        {
+                            exitCode = 0;
+                            Environment.Exit(exitCode);
+                        }
                         break; // 修复case贯穿
                     case "stop":
                         var stopRes = form.StopServer();
                         form.WriteColor(stopRes.Msg, ConsoleColor.Yellow);
+                        if (!stopRes.Success)
+                        {
+                            exitCode = 0;
+                        }
                         break; // 修复case贯穿
                     case "status":
                         string? pid = form.GetServerPid();
                         if (string.IsNullOrEmpty(pid))
                         {
                             form.WriteColor("服务未运行", ConsoleColor.Red);
-                            form.StopServer(); // 退出前停止服务
-                            Environment.Exit(1);
+                            exitCode = 0;
                         }
                         try
                         {
                             Process.GetProcessById(int.Parse(pid));
                             form.WriteColor("服务运行中", ConsoleColor.Green);
-                            form.StopServer(); // 退出前停止服务
-                            Environment.Exit(0);
+                            exitCode = 0;
                         }
                         catch
                         {
                             form.WriteColor("服务未运行", ConsoleColor.Red);
-                            form.StopServer(); // 退出前停止服务
-                            Environment.Exit(1);
+                            exitCode = 1;
                         }
+                        Environment.Exit(exitCode);
                         break; // 修复case贯穿
                     case "machineid":
                         var machineRes = form.GetMachineId();
                         if (machineRes.Success && !string.IsNullOrEmpty(machineRes.MachineId))
                         {
                             Console.WriteLine(machineRes.MachineId);
+                            exitCode = 0;
                         }
                         else
                         {
                             form.WriteColor(machineRes.Msg, ConsoleColor.Red);
+                            exitCode = 1;
                         }
                         break; // 修复case贯穿
                     // ====== 修改后的 case "verify" 分支 ======
                     case "verify":
                         // 验证模式隐藏主窗口,只影响form实例这个主窗口。（不影响输入窗口form实例的方法中的inputForm实例 和 弹窗）
-                        form.Visible = false;
-                        form.ShowInTaskbar = false;
-                        form.Opacity = 0;
+                        form.Visible = false;   // 隐藏主窗口（可见性）
+                        form.ShowInTaskbar = false; // 隐藏主窗口（任务栏）
+                        form.Opacity = 0;   // 隐藏主窗口（透明度为0）
+                        form.WindowState = FormWindowState.Minimized;   // 隐藏主窗口（最小化）
 
-                        // ========== 新增：优先校验本地授权文件 ==========
-                        var machineResult = form.GetMachineId();
-                        if (machineResult.Success && !string.IsNullOrEmpty(machineResult.MachineId))
+                        (bool Success, string Msg) verifyResult;
+                        if (string.IsNullOrEmpty(form._licenseKey))     // 未指定许可证密钥
                         {
-                            var localVerifyResult = form.VerifyLocalLicenseFile(machineResult.MachineId);
-                            if (localVerifyResult.Success)
+                            while (true)    // 未指定许可证密钥，持续展示验证对话框，直到成功或取消
                             {
-                                if (form.silentMode)
+                                // 仅展示输入验证对话框
+                                verifyResult = form.ShowVerifyDialog();
+                                exitCode = verifyResult.Success ? 0 : 1;
+                                MessageBox.Show(verifyResult.Msg, "验证结果", MessageBoxButtons.OK, verifyResult.Success ? MessageBoxIcon.Information : MessageBoxIcon.Error);
+                                form.WriteColor(verifyResult.Msg, verifyResult.Success ? ConsoleColor.Green : ConsoleColor.Red);
+                                if (verifyResult.Success || verifyResult.Msg.Contains("已取消验证"))
                                 {
-                                    Console.WriteLine(JsonConvert.SerializeObject(new { Success = true, Msg = localVerifyResult.Msg }));
-                                    form.StopServer(); // 退出前停止服务
-                                    Environment.Exit(0);
-                                }
-                                else
-                                {
-                                    MessageBox.Show(localVerifyResult.Msg, "验证结果", MessageBoxButtons.OK, MessageBoxIcon.Information);
-                                    form.StopServer(); // 退出前停止服务
-                                    Environment.Exit(0);
+                                    break;
                                 }
                             }
-                            form.WriteColor($"本地授权校验失败：{localVerifyResult.Msg}，将进行远程验证", ConsoleColor.Yellow);
                         }
-
-                        if (string.IsNullOrEmpty(form._licenseKey))
+                        else    // 有指定密钥，直接验证
                         {
-                            // 仅展示输入验证对话框
-                            var verifyResult = form.ShowVerifyDialog();
+                            // 有指定密钥，直接验证
+                            verifyResult = form.WithKeyVerify();
+                            exitCode = verifyResult.Success ? 0 : 1;
                             MessageBox.Show(verifyResult.Msg, "验证结果", MessageBoxButtons.OK, verifyResult.Success ? MessageBoxIcon.Information : MessageBoxIcon.Error);
-                            break;
+                            form.WriteColor(verifyResult.Msg, verifyResult.Success ? ConsoleColor.Green : ConsoleColor.Red);
                         }
-                        else
-                        {
-                            (bool Success, string Msg) verifyRes;
-                            if (form._verifyType == "remote")
-                            {
-                                // 远程验证逻辑（不启动本地服务，直接调用远程API）
-                                var machineResult2 = form.GetMachineId();
-                                if (!machineResult2.Success || string.IsNullOrEmpty(machineResult2.MachineId))
-                                {
-                                    verifyRes = (false, machineResult2.Msg);
-                                }
-                                else
-                                {
-                                    verifyRes = form.RemoteVerifyLicense(form._licenseKey, machineResult2.MachineId);
-                                }
-                            }
-                            else
-                            {
-                                // 本地验证逻辑（原有逻辑，启动本地服务后验证）
-                                verifyRes = form.VerifyLicense(form._licenseKey);
-                            }
-                            if (form.silentMode)
-                            {
-
-                                if (verifyRes.Success)
-                                {
-                                    Console.WriteLine(JsonConvert.SerializeObject(new { Success = true, Msg = verifyRes.Msg }));
-                                    form.StopServer(); // 退出前停止服务
-                                    Environment.Exit(0);
-                                }
-                                else
-                                {
-                                    form.WriteColor(verifyRes.Msg, ConsoleColor.Red);
-                                    form.StopServer(); // 退出前停止服务
-                                    Environment.Exit(1);
-                                }
-                            }
-                            else
-                            {
-                                MessageBox.Show(verifyRes.Msg, "验证结果", MessageBoxButtons.OK, verifyRes.Success ? MessageBoxIcon.Information : MessageBoxIcon.Error);
-                                form.StopServer(); // 退出前停止服务                               
-                                Environment.Exit(verifyRes.Success ? 0 : 1);    // 非静默模式也需要退出，否则程序会挂起
-                            }
-
-                            break; // 修复case贯穿
-                        }
+                        break;
                     default:
                         form.WriteColor("无效的Action参数，支持：start/stop/verify/status/machineid/交互模式", ConsoleColor.Red);
                         break; // 修复case贯穿
@@ -246,6 +237,12 @@ namespace LicenseServer
             {
                 MessageBox.Show($"程序错误：{ex.Message}", "错误", MessageBoxButtons.OK, MessageBoxIcon.Error);
                 form.WriteColor($"程序错误：{ex.Message}", ConsoleColor.Red);
+                exitCode = 2;
+            }
+            finally
+            {
+                form.StopServer();      // 除了启动和查看状态，其他操作退出前都需要停止服务
+                Environment.Exit(exitCode);
             }
         }
         #endregion

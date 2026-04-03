@@ -18,7 +18,7 @@ namespace LicenseServer
 {
     public partial class MainForm : Form
     {
-        #region 界面初始化（修复所有空引用+语法问题）
+        #region 界面初始化（仅主界面）
         private void InitializeComponent()
         {
             this.Text = "许可证验证工具";
@@ -163,11 +163,141 @@ namespace LicenseServer
 
             this.Controls["btnVerify"].Click += (s, e) =>
             {
-                var res = ShowVerifyDialog();
-                MessageBox.Show(res.Msg, "验证结果", MessageBoxButtons.OK,
-                    res.Success ? MessageBoxIcon.Information : MessageBoxIcon.Error);
+                while (true)
+                {
+                    var verifyResult = ShowVerifyDialog();
+                    MessageBox.Show(verifyResult.Msg, "验证结果", MessageBoxButtons.OK, verifyResult.Success ? MessageBoxIcon.Information : MessageBoxIcon.Error);
+                    WriteColor(verifyResult.Msg, verifyResult.Success ? ConsoleColor.Green : ConsoleColor.Red);
+                    if (verifyResult.Success || verifyResult.Msg.Contains("已取消验证"))
+                    {
+                        break;
+                    }
+                }
             };
         }
         #endregion
+
+
+
+        /// <summary>
+        /// 不带许可证密钥时的验证流程：实例子类inputForm，不与主窗口共享隐藏属性
+        /// 1. 先获取本机机器码
+        /// 2. 校验本地授权文件（仅一次）
+        /// 3. 校验远程授权文件
+        /// 4. 循环验证，直到验证通过或关闭输入框
+        /// </summary>
+        /// <returns>验证结果</returns>
+        public (bool Success, string Msg) ShowVerifyDialog()
+        {
+            Form inputForm = new Form
+            {
+                Text = "验证许可证",
+                Size = new Size(300, 150),
+                StartPosition = FormStartPosition.CenterScreen,
+                FormBorderStyle = FormBorderStyle.FixedDialog,
+                MaximizeBox = false,
+                MinimizeBox = false
+            };
+
+            Label label = new Label { Text = "请输入许可证密钥：", Location = new Point(10, 20), AutoSize = true };
+            TextBox textBox = new TextBox { Location = new Point(10, 50), Width = 260 };
+            Button okBtn = new Button { Text = "确定", Location = new Point(65, 85), DialogResult = DialogResult.OK };
+            Button cancelBtn = new Button { Text = "取消", Location = new Point(150, 85), DialogResult = DialogResult.Cancel };
+
+            inputForm.Controls.Add(label);
+            inputForm.Controls.Add(textBox);
+            inputForm.Controls.Add(okBtn);
+            inputForm.Controls.Add(cancelBtn);
+            inputForm.AcceptButton = okBtn;
+            inputForm.CancelButton = cancelBtn;
+
+            // ========== 第一步：获取机器码（唯一一次） ==========
+            var machineResult = GetMachineId();
+            if (!machineResult.Success || string.IsNullOrEmpty(machineResult.MachineId))
+            {
+                return (false, machineResult.Msg);
+            }
+
+            // ========== 第二步：本地授权文件校验（唯一一次，绝不重复） ==========
+            var localVerifyResult = VerifyLocalLicenseFile(machineResult.MachineId);
+            if (localVerifyResult.Success)
+            {
+                return localVerifyResult; // 本地通过，直接返回
+            }
+            WriteColor($"本地授权校验失败：{localVerifyResult.Msg}，将进行远程验证", ConsoleColor.Yellow);
+
+            // ========== 第三步：尝试读取本地文件中的密钥，自动验证 ==========
+            try
+            {
+                var licenseInfo = ReadLicenseFileInfo(machineResult.MachineId);
+                if (!string.IsNullOrEmpty(licenseInfo?.LicenseKey))
+                {
+                    // 直接调用密钥验证，无任何重复校验
+                    return VerifyLicenseByKey(licenseInfo.LicenseKey, machineResult.MachineId);
+                }
+            }
+            catch
+            {
+                return (false, "远程验证失败");
+            }
+
+            // ========== 第四步：弹窗输入密钥，手动验证 ==========
+            if (inputForm.ShowDialog() == DialogResult.OK && !string.IsNullOrEmpty(textBox.Text))
+            {
+                return VerifyLicenseByKey(textBox.Text, machineResult.MachineId);
+            }
+            else
+            {
+                return (false, "已取消验证");
+            }
+        }
+
+        /// <summary>
+        /// 带许可证密钥时的验证流程：一次性验证，无需循环输入密钥
+        /// </summary>
+        /// <returns>验证结果</returns>
+        public (bool Success, string Msg) WithKeyVerify()
+        {
+            // ========== 第一步：获取机器码（唯一一次） ==========
+            var machineResult = GetMachineId();
+            if (!machineResult.Success || string.IsNullOrEmpty(machineResult.MachineId))
+            {
+                return (false, machineResult.Msg);
+            }
+
+            // ========== 第二步：本地授权文件校验（唯一一次） ==========
+            var localVerifyResult = VerifyLocalLicenseFile(machineResult.MachineId);
+            if (localVerifyResult.Success)
+            {
+                return localVerifyResult;
+            }
+            WriteColor($"本地授权校验失败：{localVerifyResult.Msg}，将进行远程验证", ConsoleColor.Yellow);
+
+            // ========== 第三步：直接用内置密钥验证，无重复校验 ==========
+            return VerifyLicenseByKey(_licenseKey, machineResult.MachineId);
+        }
+
+        /// <summary>
+        /// 【公共核心方法】仅做密钥验证（远程/本地分支）
+        /// ✅ 无本地文件校验，杜绝重复执行
+        /// ✅ 两个公开方法共用，消除代码冗余
+        /// </summary>
+        /// <param name="licenseKey">许可证密钥</param>
+        /// <param name="machineId">机器码（已提前获取，唯一一次）</param>
+        /// <returns>验证结果</returns>
+        private (bool Success, string Msg) VerifyLicenseByKey(string licenseKey, string machineId)
+        {
+            if (_verifyType == "remote")
+            {
+                // 远程验证：直接调用API
+                return RemoteVerifyLicense(licenseKey, machineId);
+            }
+            else
+            {
+                // 本地验证：直接调用本地服务
+                return VerifyLicense(licenseKey);
+            }
+        }
+
     }
 }

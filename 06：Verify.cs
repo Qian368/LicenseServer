@@ -513,7 +513,7 @@ namespace LicenseServer
         /// <param name="key">许可证密钥</param>
         /// <param name="machineId">本机机器码（外部传入，避免重复计算）</param>
         /// <returns>验证结果</returns>
-        private (bool Success, string Msg) RemoteVerifyLicense(string key, string machineId)
+        internal (bool Success, string Msg) RemoteVerifyLicense(string key, string machineId)
         {
 
             // 前置基础校验（非业务逻辑，提前拦截）
@@ -548,7 +548,7 @@ namespace LicenseServer
         }
 
 
-        private (bool Success, string Msg) VerifyLicense(string key)
+        internal (bool Success, string Msg) VerifyLicense(string key)
         {
             // 1. 获取本机机器码
             var machineResult = GetMachineId();

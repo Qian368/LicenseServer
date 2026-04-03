@@ -42,16 +42,6 @@ namespace LicenseServer
             public string RelatedDeviceNames { get; set; } = "";
         }
 
-        /// <summary>
-        /// 授权文件存储路径（程序目录下隐藏文件）
-        /// </summary>
-        private string LocalLicenseFilePath => Path.Combine(_scriptDir, "license.lic");
-
-        /// <summary>
-        /// 定期强制远程校验周期（天），避免本地文件永久有效
-        /// </summary>
-        private readonly int _forceRemoteCheckDays = 7;
-
         #region 新增：动态密钥生成（基于机器码）
         /// <summary>
         /// 基于机器码生成固定的签名密钥（32位）
@@ -320,7 +310,7 @@ namespace LicenseServer
         /// </summary>
         /// <param name="machineId">本机机器码</param>
         /// <returns>验证结果+消息</returns>
-        private (bool Success, string Msg) VerifyLocalLicenseFile(string machineId)
+        internal (bool Success, string Msg) VerifyLocalLicenseFile(string machineId)
         {
             // 1. 检查文件是否存在
             if (!File.Exists(LocalLicenseFilePath))
@@ -367,7 +357,7 @@ namespace LicenseServer
                 }
 
                 // 7. 验证通过
-                string successMsg = $"验证通过！\n" +
+                string successMsg = $"本机已完成验证，信息如下：\n" +
                         $"许可证key：{model.LicenseKey}\n" +
                         $"机器码：{model.MachineId}\n" +
                         $"用户：{Environment.MachineName}\n" +
@@ -416,5 +406,6 @@ namespace LicenseServer
                 return null;
             }
         }
+
     }
 }

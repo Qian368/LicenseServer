@@ -26,6 +26,9 @@
   <ItemGroup>
     <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
     <PackageReference Include="System.Management" Version="8.0.0" />
+    <!-- 排除调用示例.cs文件 -->
+    <Compile Remove="许可证验证调用示例\许可证验证调用示例.cs" />
+
   </ItemGroup>
 
   <ItemGroup>
