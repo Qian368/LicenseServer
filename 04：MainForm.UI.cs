@@ -107,7 +107,7 @@ namespace LicenseServer
         {
             // 停止验证服务
             var stopRes = StopServer();
-            WriteColor(stopRes.Msg, ConsoleColor.Yellow);
+            Debug.WriteLine(stopRes.Msg);
         }
 
         private void BindButtonEvents()
@@ -167,7 +167,7 @@ namespace LicenseServer
                 {
                     var verifyResult = ShowVerifyDialog();
                     MessageBox.Show(verifyResult.Msg, "验证结果", MessageBoxButtons.OK, verifyResult.Success ? MessageBoxIcon.Information : MessageBoxIcon.Error);
-                    WriteColor(verifyResult.Msg, verifyResult.Success ? ConsoleColor.Green : ConsoleColor.Red);
+                    Debug.WriteLine(verifyResult.Msg);
                     if (verifyResult.Success || verifyResult.Msg.Contains("已取消验证"))
                     {
                         break;
@@ -224,7 +224,7 @@ namespace LicenseServer
             {
                 return localVerifyResult; // 本地通过，直接返回
             }
-            WriteColor($"本地授权校验失败：{localVerifyResult.Msg}，将进行远程验证", ConsoleColor.Yellow);
+            Debug.WriteLine($"本地授权校验失败：{localVerifyResult.Msg}，将进行远程验证");
 
             // ========== 第三步：尝试读取本地文件中的密钥，自动验证 ==========
             try
@@ -271,7 +271,7 @@ namespace LicenseServer
             {
                 return localVerifyResult;
             }
-            WriteColor($"本地授权校验失败：{localVerifyResult.Msg}，将进行远程验证", ConsoleColor.Yellow);
+            Debug.WriteLine($"本地授权校验失败：{localVerifyResult.Msg}，将进行远程验证");
 
             // ========== 第三步：直接用内置密钥验证，无重复校验 ==========
             return VerifyLicenseByKey(_licenseKey, machineResult.MachineId);

@@ -159,7 +159,7 @@ namespace LicenseServer
             }
             catch (Exception ex)
             {
-                WriteColor($"生成授权签名失败：{ex.Message}", ConsoleColor.Red);
+                Debug.WriteLine($"生成授权签名失败：{ex.Message}");
                 return "";
             }
         }
@@ -216,7 +216,7 @@ namespace LicenseServer
             }
             catch (Exception ex)
             {
-                WriteColor($"AES加密失败：{ex.Message}", ConsoleColor.Red);
+                Debug.WriteLine($"AES加密失败：{ex.Message}");
                 throw;
             }
         }
@@ -256,7 +256,7 @@ namespace LicenseServer
             }
             catch (Exception ex)
             {
-                WriteColor($"AES解密失败：{ex.Message}", ConsoleColor.Red);
+                Debug.WriteLine($"AES解密失败：{ex.Message}");
                 throw;
             }
         }
@@ -300,7 +300,7 @@ namespace LicenseServer
             }
             catch (Exception ex)
             {
-                WriteColor($"生成授权文件失败：{ex.Message}", ConsoleColor.Red);
+                Debug.WriteLine($"生成授权文件失败：{ex.Message}");
                 return false;
             }
         }
@@ -395,14 +395,14 @@ namespace LicenseServer
                 // 验证签名
                 if (!VerifyLicenseSignature(model, machineId))
                 {
-                    WriteColor("授权文件已被篡改", ConsoleColor.Red);
+                    Debug.WriteLine("授权文件已被篡改");
                     return null;
                 }
                 return model;
             }
             catch (Exception ex)
             {
-                WriteColor($"读取授权文件失败：{ex.Message}", ConsoleColor.Red);
+                Debug.WriteLine($"读取授权文件失败：{ex.Message}");
                 return null;
             }
         }

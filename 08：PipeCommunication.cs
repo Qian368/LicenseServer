@@ -5,6 +5,7 @@ using System.Windows.Forms;
 using System.IO.Pipes;
 // using Internal;
 using Newtonsoft.Json;
+using System.Diagnostics;
 
 namespace LicenseServer
 {
@@ -21,6 +22,8 @@ namespace LicenseServer
             public string VerifyType { get; set; } // local/remote
             public string ApiUrl { get; set; } // 远程API地址（仅remote模式）
             public string LicenseKey { get; set; } // 许可证密钥
+            public string AppName { get; set; } // 应用名称（可选）
+
         }
 
         /// <summary>
@@ -93,16 +96,21 @@ namespace LicenseServer
                 // 远程验证（复用原有RemoteVerifyLicense）
                 mainForm._verifyType = request.VerifyType?.ToLower() ?? mainForm._verifyType;   // 覆盖验证类型
                 mainForm._ApiUrl = request.ApiUrl?.TrimEnd('/') ?? mainForm._ApiUrl; // 覆盖API地址
+                mainForm._licenseKey = request.LicenseKey;
+
+                mainForm._appName = request.AppName ?? mainForm._appName;
+                // 注意：因为 LocalLicenseFilePath 是包含 get { ... } 的计算属性，
+                // 所以只需修改 _appName，下次访问 LocalLicenseFilePath 时就会自动按新名称生成路径并创建目录。
 
                 (bool Success, string Msg) verifyResult;
-                if (string.IsNullOrEmpty(request.LicenseKey))     // 未指定许可证密钥
+                if (string.IsNullOrEmpty(mainForm._licenseKey))     // 未指定许可证密钥
                 {
                     while (true)    // 未指定许可证密钥，持续展示验证对话框，直到成功或取消
                     {
                         // 仅展示输入验证对话框
                         verifyResult = mainForm.ShowVerifyDialog();
                         MessageBox.Show(verifyResult.Msg, "验证结果", MessageBoxButtons.OK, verifyResult.Success ? MessageBoxIcon.Information : MessageBoxIcon.Error);
-                        Console.WriteLine(verifyResult.Msg, verifyResult.Success ? ConsoleColor.Green : ConsoleColor.Red);
+                        Debug.WriteLine(verifyResult.Msg);
                         if (verifyResult.Success || verifyResult.Msg.Contains("已取消验证"))
                         {
                             break;
@@ -114,7 +122,7 @@ namespace LicenseServer
                     // 有指定密钥，直接验证
                     verifyResult = mainForm.WithKeyVerify();
                     MessageBox.Show(verifyResult.Msg, "验证结果", MessageBoxButtons.OK, verifyResult.Success ? MessageBoxIcon.Information : MessageBoxIcon.Error);
-                    Console.WriteLine(verifyResult.Msg, verifyResult.Success ? ConsoleColor.Green : ConsoleColor.Red);
+                    Debug.WriteLine(verifyResult.Msg);
                 }
 
                 response.Success = verifyResult.Success;

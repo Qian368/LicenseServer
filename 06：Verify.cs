@@ -53,6 +53,10 @@ namespace LicenseServer
             // 本机信息
             public string MachineId { get; set; } = "";
             public string ComputerName { get; set; } = Environment.MachineName;
+
+            // 新增：记录用户原始输入的Key和自动找回状态
+            public string InputKey { get; set; } = "";
+            public bool IsAutoRecovered { get; set; }
         }
 
         /// <summary>
@@ -65,11 +69,13 @@ namespace LicenseServer
             public bool NeedAddDevice { get; set; } // 是否需要新增设备
             public bool NeedUpdateDeviceName { get; set; } // 是否需要更新设备名称
             public JToken TargetDevice { get; set; } // 需要更新的设备
+            public List<string> RedundantDeviceIds { get; set; } = new List<string>(); // 新增：需要清理的冗余设备ID
             public string ExpiresAtDisplay { get; set; } = "永久"; // 有效期显示文本
             public string MultiLicenseTip { get; set; } = ""; // 多许可证提示
             public string ExpireWarnTip { get; set; } = ""; // 过期提醒
             public string RelatedDeviceNamesStr { get; set; } = "无"; // 关联设备名称字符串
             public int CurrentTotalDeviceCount { get; set; } // 许可证当前总设备数
+            public string AutoRecoverTip { get; set; } = ""; // 新增：自动找回提示
         }
 
 
@@ -80,6 +86,7 @@ namespace LicenseServer
         {
             var rawData = new LicenseVerificationRawData
             {
+                InputKey = key,
                 MachineId = machineId,
                 ComputerName = Environment.MachineName
             };
@@ -88,29 +95,123 @@ namespace LicenseServer
             {
                 client.DefaultRequestHeaders.Accept.Add(new System.Net.Http.Headers.MediaTypeWithQualityHeaderValue("application/json"));
 
-                // 1. 拉取待验证的许可证基础信息
-                string licenseFilter = $"?filter=(key='{key}')&expand=devices&perPage=1";
-                string licenseUrl = $"{RemoteApiUrl}/api/collections/licenses/records{licenseFilter}";
-                HttpResponseMessage licenseResp = client.GetAsync(licenseUrl).Result;
-                if (licenseResp.IsSuccessStatusCode)
+                // 1. 先拉取本机绑定的所有设备（全局跨许可证）
+                var globalDeviceResult = GetAllDevicesByMachineId(machineId);
+                rawData.GlobalDeviceList = globalDeviceResult.Devices;
+                rawData.GlobalDeviceQuerySuccess = globalDeviceResult.Success;
+                rawData.GlobalDeviceQueryMsg = globalDeviceResult.Msg;
+
+                string targetKeyToVerify = key; // 默认使用用户输入的key
+
+                // 2. 综合查询：合并用户输入的Key和本机已绑定的所有License ID，统一查询并挑选最优
+                var queryConditions = new List<string>();
+                if (!string.IsNullOrEmpty(key))
                 {
-                    string licenseJson = licenseResp.Content.ReadAsStringAsync().Result;
-                    rawData.LicenseData = JObject.Parse(licenseJson);
-                    // 提取许可证核心字段
-                    if (rawData.LicenseData["totalItems"]?.Value<int>() > 0)
-                    {
-                        rawData.License = rawData.LicenseData["items"]?[0];
-                        rawData.LicenseId = rawData.License?["id"]?.ToString() ?? "";
-                        rawData.LicenseKey = rawData.License?["key"]?.ToString() ?? "";
-                        rawData.LicenseIsActive = rawData.License?["is_active"]?.Value<bool>() ?? false;
-                        rawData.LicenseExpiresAtStr = rawData.License?["expires_at"]?.ToString() ?? "";
-                        rawData.LicenseMaxDevices = rawData.License?["max_devices"]?.Value<int>() ?? 0;
-                    }
-                    // 获取服务端时间
-                    rawData.ServerTime = GetServerTime(licenseResp);
+                    queryConditions.Add($"key='{key}'");
                 }
 
-                // 2. 拉取该许可证下的所有设备
+                if (rawData.GlobalDeviceList.Count > 0)
+                {
+                    var boundLicenseIds = rawData.GlobalDeviceList
+                        .Select(d => d["license"]?.ToString())
+                        .Where(id => !string.IsNullOrEmpty(id))
+                        .Distinct()
+                        .ToList();
+
+                    foreach (var id in boundLicenseIds)
+                    {
+                        queryConditions.Add($"id='{id}'");
+                    }
+                }
+
+                if (queryConditions.Count > 0)
+                {
+                    string combinedFilter = string.Join("||", queryConditions);
+                    string licensesUrl = $"{RemoteApiUrl}/api/collections/licenses/records?filter=({combinedFilter})";
+
+                    HttpResponseMessage licensesResp = client.GetAsync(licensesUrl).Result;
+                    if (licensesResp.IsSuccessStatusCode)
+                    {
+                        string licensesJson = licensesResp.Content.ReadAsStringAsync().Result;
+                        JObject licensesData = JObject.Parse(licensesJson);
+                        var candidateLicenses = licensesData["items"] as JArray;
+
+                        if (candidateLicenses != null && candidateLicenses.Count > 0)
+                        {
+                            // 核心优先级逻辑：挑选最优许可证
+                            var bestLicense = candidateLicenses
+                                .OrderByDescending(l => l["is_active"]?.Value<bool>() ?? false) // 优先级1：处于激活状态
+                                .ThenByDescending(l => string.IsNullOrEmpty(l["expires_at"]?.ToString())) // 优先级2：永久有效（时间为空）
+                                .ThenByDescending(l =>
+                                {
+                                    // 优先级3：有效期越晚越好
+                                    string expStr = l["expires_at"]?.ToString();
+                                    if (string.IsNullOrEmpty(expStr)) return DateTime.MaxValue;
+                                    if (DateTime.TryParse(expStr, out DateTime exp)) return exp;
+                                    return DateTime.MinValue;
+                                })
+                                .FirstOrDefault();
+
+                            if (bestLicense != null)
+                            {
+                                string bestKey = bestLicense["key"]?.ToString() ?? "";
+
+                                // 记录本机曾绑定的最优Key（用于提示）
+                                var bestBoundLicense = candidateLicenses
+                                    .Where(l => rawData.GlobalDeviceList.Any(d => d["license"]?.ToString() == l["id"]?.ToString()))
+                                    .OrderByDescending(l => l["is_active"]?.Value<bool>() ?? false)
+                                    .ThenByDescending(l => string.IsNullOrEmpty(l["expires_at"]?.ToString()))
+                                    .ThenByDescending(l =>
+                                    {
+                                        string expStr = l["expires_at"]?.ToString();
+                                        if (string.IsNullOrEmpty(expStr)) return DateTime.MaxValue;
+                                        if (DateTime.TryParse(expStr, out DateTime exp)) return exp;
+                                        return DateTime.MinValue;
+                                    })
+                                    .FirstOrDefault();
+
+                                if (bestBoundLicense != null)
+                                {
+                                    rawData.BoundOtherLicenseKey = bestBoundLicense["key"]?.ToString() ?? "未知";
+                                }
+
+                                // 如果最优许可证的Key不是用户输入的Key，触发自动找回/纠正
+                                if (string.IsNullOrEmpty(key) || key != bestKey)
+                                {
+                                    rawData.IsAutoRecovered = true;
+                                    targetKeyToVerify = bestKey;
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // 3. 拉取待验证的许可证基础信息 (使用 targetKeyToVerify)
+                if (!string.IsNullOrEmpty(targetKeyToVerify))
+                {
+                    string licenseFilter = $"?filter=(key='{targetKeyToVerify}')&expand=devices&perPage=1";
+                    string licenseUrl = $"{RemoteApiUrl}/api/collections/licenses/records{licenseFilter}";
+                    HttpResponseMessage licenseResp = client.GetAsync(licenseUrl).Result;
+                    if (licenseResp.IsSuccessStatusCode)
+                    {
+                        string licenseJson = licenseResp.Content.ReadAsStringAsync().Result;
+                        rawData.LicenseData = JObject.Parse(licenseJson);
+                        // 提取许可证核心字段
+                        if (rawData.LicenseData["totalItems"]?.Value<int>() > 0)
+                        {
+                            rawData.License = rawData.LicenseData["items"]?[0];
+                            rawData.LicenseId = rawData.License?["id"]?.ToString() ?? "";
+                            rawData.LicenseKey = rawData.License?["key"]?.ToString() ?? "";
+                            rawData.LicenseIsActive = rawData.License?["is_active"]?.Value<bool>() ?? false;
+                            rawData.LicenseExpiresAtStr = rawData.License?["expires_at"]?.ToString() ?? "";
+                            rawData.LicenseMaxDevices = rawData.License?["max_devices"]?.Value<int>() ?? 0;
+                        }
+                        // 获取服务端时间
+                        rawData.ServerTime = GetServerTime(licenseResp);
+                    }
+                }
+
+                // 4. 拉取该许可证下的所有设备
                 if (!string.IsNullOrEmpty(rawData.LicenseId))
                 {
                     string licenseDevicesFilter = $"?filter=(license.id='{rawData.LicenseId}')&perPage=100";
@@ -123,32 +224,6 @@ namespace LicenseServer
                         if (rawData.LicenseTotalDeviceCount > 0)
                         {
                             rawData.LicenseDeviceList = ((JArray)rawData.LicenseDevicesData["items"]).ToList();
-                        }
-                    }
-                }
-
-                // 3. 拉取本机绑定的所有设备（全局跨许可证）
-                var globalDeviceResult = GetAllDevicesByMachineId(machineId);
-                rawData.GlobalDeviceList = globalDeviceResult.Devices;
-                rawData.GlobalDeviceQuerySuccess = globalDeviceResult.Success;
-                rawData.GlobalDeviceQueryMsg = globalDeviceResult.Msg;
-
-                // 4. 预拉取本机绑定的其他许可证Key（提前拉取，避免第二步重复请求）
-                if (rawData.GlobalDeviceList.Count > 0)
-                {
-                    string firstLicenseId = rawData.GlobalDeviceList
-                        .Select(d => d["license"]?.ToString())
-                        .FirstOrDefault(k => !string.IsNullOrEmpty(k));
-                    if (!string.IsNullOrEmpty(firstLicenseId))
-                    {
-                        string singleLicenseFilter = $"?filter=(id='{firstLicenseId}')&perPage=1";
-                        string singleLicenseUrl = $"{RemoteApiUrl}/api/collections/licenses/records{singleLicenseFilter}";
-                        HttpResponseMessage singleLicenseResp = client.GetAsync(singleLicenseUrl).Result;
-                        if (singleLicenseResp.IsSuccessStatusCode)
-                        {
-                            string singleLicenseJson = singleLicenseResp.Content.ReadAsStringAsync().Result;
-                            JObject singleLicenseData = JObject.Parse(singleLicenseJson);
-                            rawData.BoundOtherLicenseKey = singleLicenseData["items"]?[0]?["key"]?.ToString() ?? "未知";
                         }
                     }
                 }
@@ -165,8 +240,16 @@ namespace LicenseServer
         {
             var analysisResult = new LicenseAnalysisResult();
 
+            // 基础校验：如果没有提供key，且没有自动找回
+            if (string.IsNullOrEmpty(rawData.InputKey) && !rawData.IsAutoRecovered)
+            {
+                analysisResult.Success = false;
+                analysisResult.Msg = "许可证密钥不能为空，且未检测到本机的历史绑定记录";
+                return analysisResult;
+            }
+
             // 基础校验：许可证是否存在
-            if (rawData.LicenseData["totalItems"]?.Value<int>() == 0)
+            if (rawData.LicenseData["totalItems"]?.Value<int>() == 0 || rawData.LicenseData["totalItems"] == null)
             {
                 analysisResult.Success = false;
                 analysisResult.Msg = "许可证不存在";
@@ -211,11 +294,21 @@ namespace LicenseServer
                 try
                 {
                     DateTime expiresTimeUtc = DateTime.Parse(rawData.LicenseExpiresAtStr).ToUniversalTime();
-                    DateTime serverTimeUtc = rawData.ServerTime.ToUniversalTime();
+                    DateTime serverTimeUtc = DateTime.MinValue;
+                    if (rawData.ServerTime == DateTime.MinValue)
+                    {
+                        analysisResult.Success = false;
+                        analysisResult.Msg = "无法获取服务器时间（服务端时间为空），无法校验许可证有效期期";
+                        return analysisResult;
+                    }
+                    else
+                    {
+                        serverTimeUtc = rawData.ServerTime.ToUniversalTime();
+                    }
                     if (expiresTimeUtc < serverTimeUtc)
                     {
                         analysisResult.Success = false;
-                        analysisResult.Msg = $"许可证已过期（服务器时间：{rawData.ServerTime:yyyy-MM-dd HH:mm:ss}，有效期至：{rawData.LicenseExpiresAtStr}）";
+                        analysisResult.Msg = $"许可证已过期（服务器时间：{serverTimeUtc:yyyy-MM-dd HH:mm:ss}，有效期至：{expiresTimeUtc:yyyy-MM-dd HH:mm:ss}）";
                         return analysisResult;
                     }
                 }
@@ -245,7 +338,14 @@ namespace LicenseServer
             // 标记是否需要新增/更新设备
             analysisResult.NeedAddDevice = currentLocalDeviceCount == 0;
             analysisResult.NeedUpdateDeviceName = currentLocalDeviceCount > 0;
+            // 修复：如果出现脏数据（一台机器在同一个许可证下绑定了多次），我们只取第一条（最新的一条）作为更新目标
             analysisResult.TargetDevice = analysisResult.NeedUpdateDeviceName ? currentLicenseDevices[0] : null;
+
+            // 脏数据清理：如果当前许可证下，本机的绑定记录大于 1 条，则记录需要被清理的冗余设备 ID
+            if (currentLocalDeviceCount > 1)
+            {
+                analysisResult.RedundantDeviceIds = currentLicenseDevices.Skip(1).Select(d => d["id"]?.ToString()).Where(id => !string.IsNullOrEmpty(id)).ToList();
+            }
 
             // 新增设备时的校验
             if (analysisResult.NeedAddDevice)
@@ -337,7 +437,22 @@ namespace LicenseServer
                 }
                 catch (Exception ex)
                 {
-                    WriteColor($"解析有效期失败：{ex.Message}", ConsoleColor.Yellow);
+                    analysisResult.Success = false;
+                    analysisResult.Msg = $"解析有效期失败：{ex.Message}";
+                    return analysisResult;
+                }
+            }
+
+            // 自动找回提醒
+            if (rawData.IsAutoRecovered)
+            {
+                if (string.IsNullOrEmpty(rawData.InputKey))
+                {
+                    analysisResult.AutoRecoverTip = $"\n💡 提示：未提供许可证密钥，检测到本机已绑定许可证，已自动为您找回并验证。";
+                }
+                else
+                {
+                    analysisResult.AutoRecoverTip = $"\n💡 提示：本设备已有绑定许可证，已自动从 {rawData.InputKey} 切换为您已绑定的更优许可证进行验证。";
                 }
             }
 
@@ -476,6 +591,21 @@ namespace LicenseServer
                         }
                     }
 
+                    // 2.5 脏数据清理逻辑：删除冗余的设备记录
+                    if (analysisResult.RedundantDeviceIds != null && analysisResult.RedundantDeviceIds.Count > 0)
+                    {
+                        foreach (string redundantId in analysisResult.RedundantDeviceIds)
+                        {
+                            HttpResponseMessage deleteResp = client.DeleteAsync($"{devicesUrl}/{redundantId}").Result;
+                            if (deleteResp.IsSuccessStatusCode)
+                            {
+                                // 清理成功后，记得把许可证当前绑定的总设备数减去 1
+                                analysisResult.CurrentTotalDeviceCount--;
+                            }
+                            // 如果删除失败，这里选择静默忽略，不影响主流程的验证通过
+                        }
+                    }
+
                     // 3. 生成本地授权文件
                     GenerateLicenseFile(
                         rawData.LicenseKey,
@@ -494,7 +624,7 @@ namespace LicenseServer
                         $"有效期：{analysisResult.ExpiresAtDisplay}\n" +
                         $"当前许可证绑定设备：{analysisResult.CurrentTotalDeviceCount}/{rawData.LicenseMaxDevices}\n" +
                         $"关联设备列表：{analysisResult.RelatedDeviceNamesStr}\n" +
-                        $"{analysisResult.MultiLicenseTip}{analysisResult.ExpireWarnTip}";
+                        $"{analysisResult.MultiLicenseTip}{analysisResult.ExpireWarnTip}{analysisResult.AutoRecoverTip}";
 
                     return (true, successMsg);
                 }
@@ -517,11 +647,6 @@ namespace LicenseServer
         {
 
             // 前置基础校验（非业务逻辑，提前拦截）
-            if (string.IsNullOrEmpty(key))
-            {
-                return (false, "许可证密钥不能为空");
-            }
-
             if (string.IsNullOrEmpty(machineId))
             {
                 return (false, "机器码为空，无法验证");

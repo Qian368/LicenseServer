@@ -1,0 +1,27 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "启动 许可证验证调用示例",
+            "type": "coreclr",
+            "request": "launch",
+            "preLaunchTask": "build-caller",
+            "program": "${workspaceFolder}/许可证验证调用示例/bin/Debug/net9.0-windows/许可证验证调用示例.dll",
+            "args": [],
+            "cwd": "${workspaceFolder}/许可证验证调用示例",
+            "stopAtEntry": false,
+            "console": "internalConsole"
+        },
+        {
+            "name": "启动 LicenseServer (独立测试)",
+            "type": "coreclr",
+            "request": "launch",
+            "preLaunchTask": "build-server",
+            "program": "${workspaceFolder}/bin/Debug/net9.0-windows/LicenseServer.dll",
+            "args": [],
+            "cwd": "${workspaceFolder}",
+            "stopAtEntry": false,
+            "console": "internalConsole"
+        }
+    ]
+}

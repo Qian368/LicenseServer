@@ -15,6 +15,7 @@ using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using System.IO.Pipes;
 
+
 namespace LicenseServer
 {
     public partial class MainForm : Form
@@ -24,13 +25,13 @@ namespace LicenseServer
         [STAThread]
         static void Main(string[] args)
         {
-            // 新增：注册应用程序退出事件，兜底停止服务
+            /* // 注册应用程序退出事件，兜底停止服务，为保证start和status命令正常运行，这里应当注释掉
             AppDomain.CurrentDomain.ProcessExit += (s, e) =>
             {
                 var form = new MainForm();
                 form.StopServer();
                 form.WriteColor("程序退出，已停止验证服务", ConsoleColor.Yellow);
-            };
+            }; */
 
             Application.EnableVisualStyles();
             Application.SetCompatibleTextRenderingDefault(false);
@@ -43,9 +44,11 @@ namespace LicenseServer
                 if (args[i].ToLower() == "-pipemode" || args[i].ToLower() == "/pipemode")   // 解析管道模式指令
                 {
                     form._isPipeMode = true;
-                    // 👇 替换原有代码：使用主进程传递的管道句柄创建流（更稳定）
+                    form._action = "pipemode"; // 显式设置 action 为 pipemode，避免进入默认交互模式
+                    // 使用主进程传递的管道句柄创建流（更稳定）
                     string pipeReadHandle = args[i + 1];  // 读句柄
                     string pipeWriteHandle = args[i + 2]; // 写句柄
+                    // 创建管道流
                     form._pipeReader = new StreamReader(
                         new AnonymousPipeClientStream(PipeDirection.In, pipeReadHandle),
                         Encoding.UTF8);
@@ -125,8 +128,9 @@ namespace LicenseServer
             }
 
 
-            // 程序退出码：0-成功，1-失败，2-未知错误
-            int exitCode = 1;
+
+            int exitCode = 1;   // 程序退出码：0-成功，1-失败，2-未知错误
+            bool _needStopServer = true; // 默认需要停止
             try
             {
 
@@ -137,7 +141,7 @@ namespace LicenseServer
                     return; // 管道模式执行完直接退出，不走原有CLI逻辑
                 }
 
-                if (form._action == "交互模式")
+                if (string.IsNullOrEmpty(form._action) || form._action == "交互模式")
                 {
                     Application.Run(form);
                     return;
@@ -151,8 +155,8 @@ namespace LicenseServer
                         if (!startRes.Success)
                         {
                             exitCode = 0;
-                            Environment.Exit(exitCode);
                         }
+                        _needStopServer = false;    // 启动成功 → 不希望 finally 关闭服务
                         break; // 修复case贯穿
                     case "stop":
                         var stopRes = form.StopServer();
@@ -169,24 +173,19 @@ namespace LicenseServer
                             form.WriteColor("服务未运行", ConsoleColor.Red);
                             exitCode = 0;
                         }
-                        try
+                        else
                         {
                             Process.GetProcessById(int.Parse(pid));
                             form.WriteColor("服务运行中", ConsoleColor.Green);
                             exitCode = 0;
                         }
-                        catch
-                        {
-                            form.WriteColor("服务未运行", ConsoleColor.Red);
-                            exitCode = 1;
-                        }
-                        Environment.Exit(exitCode);
+                        _needStopServer = false;    // 状态查询成功 → 不希望 finally 关闭服务
                         break; // 修复case贯穿
                     case "machineid":
                         var machineRes = form.GetMachineId();
                         if (machineRes.Success && !string.IsNullOrEmpty(machineRes.MachineId))
                         {
-                            Console.WriteLine(machineRes.MachineId);
+                            form.WriteColor(machineRes.MachineId, ConsoleColor.Green);
                             exitCode = 0;
                         }
                         else
@@ -194,6 +193,7 @@ namespace LicenseServer
                             form.WriteColor(machineRes.Msg, ConsoleColor.Red);
                             exitCode = 1;
                         }
+
                         break; // 修复case贯穿
                     // ====== 修改后的 case "verify" 分支 ======
                     case "verify":
@@ -241,7 +241,11 @@ namespace LicenseServer
             }
             finally
             {
-                form.StopServer();      // 除了启动和查看状态，其他操作退出前都需要停止服务
+                if (_needStopServer)    // ✅ 只有需要停止时，才停止
+                {
+                    form.StopServer();
+                    form.WriteColor("程序退出，已停止验证服务", ConsoleColor.Yellow);
+                }
                 Environment.Exit(exitCode);
             }
         }

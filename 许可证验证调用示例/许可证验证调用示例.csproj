@@ -1,0 +1,47 @@
+<Project Sdk="Microsoft.NET.Sdk">
+<PropertyGroup>
+  <GenerateAssemblyInfo>false</GenerateAssemblyInfo> <!-- 禁止生成 AssemblyInfo.cs -->
+</PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)' == 'Release'">
+    <!-- 仅在 Release 模式下关闭 PDB 调试文件和开启优化 -->
+    <DebugSymbols>false</DebugSymbols>
+    <DebugType>none</DebugType>
+    <Optimize>true</Optimize>
+  </PropertyGroup>
+
+  <!-- 基础配置：指定框架版本（根据你的实际环境调整，比如 net6.0/net7.0/net48 等） -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType> <!-- 控制台应用，生成EXE -->
+    <TargetFramework>net9.0-windows</TargetFramework> <!-- 替换为你实际使用的框架版本 -->
+    <PlatformTarget>AnyCPU</PlatformTarget>
+    <RootNamespace>LicenseServer.Caller</RootNamespace>
+    <AssemblyName>LicenseServerCaller</AssemblyName> <!-- 生成的程序集名称 -->
+    <!-- <OutputPath>./publish</OutputPath> --> <!-- 输出目录（可选，和示例中调用的子程序路径对应） -->
+    <Nullable>disable</Nullable> <!-- 关闭可空引用（避免示例代码报错） -->
+    <ImplicitUsings>enable</ImplicitUsings>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems> <!-- 禁止用默认的编译项 -->
+  </PropertyGroup>
+
+  <!-- 依赖项：示例中用到的 Newtonsoft.Json -->
+  <ItemGroup>
+    <PackageReference Include="Newtonsoft.Json" Version="13.0.3" /> <!-- 版本可按需调整 -->
+  </ItemGroup>
+
+  <!-- 指定要编译的单个CS文件（相对路径） -->
+  <ItemGroup>
+    <Compile Include="许可证验证调用示例.cs" />
+  </ItemGroup>
+
+  <!-- 可选：如果需要复制子程序（LicenseServer.exe）到输出目录 -->
+<!-- 自动拷贝 LicenseServer 发布产物到当前项目输出目录的 LicenseServer 文件夹 -->
+<ItemGroup>
+  <!-- 递归拷贝 publish 目录下所有文件 -->
+  <Content Include="../bin/Release/net9.0-windows/publish/**/*.*">
+    <!-- 仅拷贝新文件，避免重复复制 -->
+    <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    <!-- 核心：指定拷贝到输出目录的 LicenseServer 文件夹（保留原目录结构） -->
+    <Link>LicenseServer/%(RecursiveDir)%(FileName)%(Extension)</Link>
+  </Content>
+</ItemGroup>
+
+</Project>

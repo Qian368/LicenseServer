@@ -13,6 +13,7 @@ using System.Threading;
 using System.Windows.Forms;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
+using System.Diagnostics;
 
 namespace LicenseServer
 {
@@ -191,7 +192,10 @@ namespace LicenseServer
             }
             catch (Exception ex)
             {
-                WriteColor($"无法获取服务器时间，使用本地时间：{ex.Message}", ConsoleColor.Yellow);
+                Debug.WriteLine($"无法获取服务器时间：{ex.Message}");
+                // 返回空值
+                return DateTime.MinValue;
+
             }
             return DateTime.Now;
         }
@@ -248,7 +252,7 @@ namespace LicenseServer
         {
             try
             {
-                // 1. 强制隐藏窗体（管道模式无界面，静默运行）
+                // 1. 强制隐藏窗体（管道模式无主界面，静默运行）
                 this.Visible = false;
                 this.ShowInTaskbar = false;
                 this.Opacity = 0;

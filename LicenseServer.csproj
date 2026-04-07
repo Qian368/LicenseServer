@@ -1,23 +1,26 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
+<PropertyGroup>
+  <GenerateAssemblyInfo>false</GenerateAssemblyInfo> <!-- 禁止生成 AssemblyInfo.cs -->
+</PropertyGroup>
+
+  <PropertyGroup Condition="'$(Configuration)' == 'Release'">
+    <!-- 仅在 Release 模式下关闭 PDB 调试文件和开启优化 -->
+    <DebugSymbols>false</DebugSymbols>
+    <DebugType>none</DebugType>
+    <Optimize>true</Optimize>
+  </PropertyGroup>
+
   <PropertyGroup>
     <!-- <OutputType>winexe</OutputType> -->
     <OutputType>exe</OutputType>
     <TargetFramework>net9.0-windows</TargetFramework>
+    <PlatformTarget>AnyCPU</PlatformTarget>
     <UseWindowsForms>true</UseWindowsForms>
     <Nullable>disable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
 
-    <!-- 关闭 PDB 调试文件-->
-    <DebugSymbols>false</DebugSymbols>
-    <DebugType>none</DebugType>
-
     <!-- .NET 8/9 需显式启用，.NET 6/7 默认开启但建议显式声明 --> 
     <EnableWindowsFormsConsoleSupport>false</EnableWindowsFormsConsoleSupport>
-    <!-- 移除调试信息 -->
-    <DebugType>none</DebugType>
-    <DebugSymbols>false</DebugSymbols>
-    <!-- 编译优化 -->
-    <Optimize>true</Optimize>
     <!-- 排除不必要的WinForms组件 -->
     <PublishReadyToRun>false</PublishReadyToRun>
     <EnableUnsafeBinaryFormatterSerialization>false</EnableUnsafeBinaryFormatterSerialization>
@@ -26,12 +29,12 @@
   <ItemGroup>
     <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
     <PackageReference Include="System.Management" Version="8.0.0" />
-    <!-- 排除调用示例.cs文件 -->
-    <Compile Remove="许可证验证调用示例\许可证验证调用示例.cs" />
+    <!-- 排除调用示例文件夹下的所有文件，避免子项目的obj/bin目录污染当前项目 -->
+    <Compile Remove="许可证验证调用示例\**" />
+    <Content Remove="许可证验证调用示例\**" />
+    <EmbeddedResource Remove="许可证验证调用示例\**" />
+    <None Remove="许可证验证调用示例\**" />
 
-  </ItemGroup>
-
-  <ItemGroup>
     <!-- 资源文件/文件夹自动复制 -->
     <!-- <None Update="pocketbase/**/*" CopyToOutputDirectory="PreserveNewest" /> -->
     <!-- 上面方式声明：发布（publish）的时候 可能被忽略、被过滤、被吃掉exe文件 -->
