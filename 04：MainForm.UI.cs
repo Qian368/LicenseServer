@@ -192,19 +192,21 @@ namespace LicenseServer
             Form inputForm = new Form
             {
                 Text = "验证许可证",
-                Size = new Size(300, 150),
+                Size = new Size(300, 185),
                 StartPosition = FormStartPosition.CenterScreen,
                 FormBorderStyle = FormBorderStyle.FixedDialog,
                 MaximizeBox = false,
                 MinimizeBox = false
             };
 
-            Label label = new Label { Text = "请输入许可证密钥：", Location = new Point(10, 20), AutoSize = true };
-            TextBox textBox = new TextBox { Location = new Point(10, 50), Width = 260 };
-            Button okBtn = new Button { Text = "确定", Location = new Point(65, 85), DialogResult = DialogResult.OK };
-            Button cancelBtn = new Button { Text = "取消", Location = new Point(150, 85), DialogResult = DialogResult.Cancel };
+            Label label = new Label { Text = "请输入许可证密钥：", Location = new Point(10, 40), AutoSize = true };
+            Label label2 = new Label { Text = "（如果已验证过，无需输入密钥）", Location = new Point(10, 60), AutoSize = true };
+            TextBox textBox = new TextBox { Location = new Point(10, 80), Width = 260 };
+            Button okBtn = new Button { Text = "确定", Location = new Point(65, 110), DialogResult = DialogResult.OK };
+            Button cancelBtn = new Button { Text = "取消", Location = new Point(150, 110), DialogResult = DialogResult.Cancel };
 
             inputForm.Controls.Add(label);
+            inputForm.Controls.Add(label2);
             inputForm.Controls.Add(textBox);
             inputForm.Controls.Add(okBtn);
             inputForm.Controls.Add(cancelBtn);
@@ -242,7 +244,7 @@ namespace LicenseServer
             }
 
             // ========== 第四步：弹窗输入密钥，手动验证 ==========
-            if (inputForm.ShowDialog() == DialogResult.OK && !string.IsNullOrEmpty(textBox.Text))
+            if (inputForm.ShowDialog() == DialogResult.OK)
             {
                 return VerifyLicenseByKey(textBox.Text, machineResult.MachineId);
             }

@@ -25,6 +25,8 @@ namespace LicenseServer
         [STAThread]
         static void Main(string[] args)
         {
+            // ====== 解决 Debug 控制台/Console 编码兼容 ======
+            Console.OutputEncoding = Encoding.UTF8;
             /* // 注册应用程序退出事件，兜底停止服务，为保证start和status命令正常运行，这里应当注释掉
             AppDomain.CurrentDomain.ProcessExit += (s, e) =>
             {

@@ -40,6 +40,8 @@ namespace LicenseServer
             public string Signature { get; set; } = "";
             /// <summary>许可证绑定的所有设备名（逗号分隔）</summary>
             public string RelatedDeviceNames { get; set; } = "";
+            /// <summary>许可证有效期剩余天数</summary>
+            public string ExpireWarnTip { get; set; } = "";
         }
 
         #region 新增：动态密钥生成（基于机器码）
@@ -347,6 +349,15 @@ namespace LicenseServer
                         File.Delete(LocalLicenseFilePath);
                         return (false, "本地授权文件已过期");
                     }
+                    else
+                    {
+                        // 计算剩余天数
+                        double remainingDays = (expiresTimeUtc - DateTime.UtcNow).TotalDays;
+                        if (remainingDays > 0 && remainingDays <= limitdate)
+                        {
+                            model.ExpireWarnTip = $"⚠️ 警告：许可证即将过期！剩余{Math.Ceiling(remainingDays)}天，请联系管理员延期";
+                        }
+                    }
                 }
 
                 // 6. 检查是否需要强制远程校验
@@ -363,7 +374,8 @@ namespace LicenseServer
                         $"用户：{Environment.MachineName}\n" +
                         $"有效期：{model.ExpiresAt}\n" +
                         $"当前许可证绑定设备：{model.CurrentDevices}/{model.MaxDevices}\n" +
-                        $"关联设备列表：{model.RelatedDeviceNames}\n";
+                        $"关联设备列表：{model.RelatedDeviceNames}\n" +
+                        $"{model.ExpireWarnTip}\n";
                 return (true, successMsg);
             }
             catch (Exception ex)

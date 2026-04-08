@@ -47,7 +47,7 @@ namespace LicenseServer
         internal string _verifyType = "local"; // 验证类型：local-本地验证，remote-远程验证
         internal string _licenseKey = "";        // 许可证
 
-        private int limitdate = 30;     // 验证完成后有效期小于多少天提醒
+        private int limitdate = 30;     // 验证完成后有效期小于多少天提醒过期
         private readonly int _forceRemoteCheckDays = 30; // 定期强制远程校验周期（天），避免本地文件永久有效
         private int maxLicensePerDevice = 1;      // 一台设备最多能绑定几个许可证
 

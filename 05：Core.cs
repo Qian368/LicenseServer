@@ -22,8 +22,8 @@ namespace LicenseServer
         #region 核心方法：验证前置方法
         private void WriteColor(string message, ConsoleColor color = ConsoleColor.White)
         {
-            Console.WriteLine($"[{DateTime.Now:HH:mm:ss}] {message}");
             Console.ForegroundColor = color;
+            Console.WriteLine($"[{DateTime.Now:HH:mm:ss}] {message}");
             Console.ResetColor();
         }
 
