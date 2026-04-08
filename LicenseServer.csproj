@@ -12,10 +12,11 @@
 
   <PropertyGroup>
     <!-- <OutputType>winexe</OutputType> -->
-    <OutputType>exe</OutputType>
+    <OutputType>winexe</OutputType>
     <TargetFramework>net9.0-windows</TargetFramework>
     <PlatformTarget>AnyCPU</PlatformTarget>
     <UseWindowsForms>true</UseWindowsForms>
+    <NoWarn>$(NoWarn);CA1416;CS8632;CS0168</NoWarn>
     <Nullable>disable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
 
