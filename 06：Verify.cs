@@ -14,6 +14,9 @@ using System.Windows.Forms;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 
+// using CertificatePinning.Security;   // 引入自定义的证书公钥锁定校验库
+
+
 namespace LicenseServer
 {
     public partial class MainForm : Form
@@ -91,6 +94,9 @@ namespace LicenseServer
                 ComputerName = Environment.MachineName
             };
 
+
+            // using (HttpClient client = SecureHttpClientFactory.CreateClientWithPublicKeyPinning(10))     // 使用自定义工厂创建安全的HttpClient
+            // var handler = new SimplePublicKeyPinningHandler();   // 直接创建带公钥锁定的Handler（只要这一步，验证就会生效），后续正常创建HttpClient即可
             using (HttpClient client = new HttpClient { Timeout = TimeSpan.FromSeconds(10) })
             {
                 client.DefaultRequestHeaders.Accept.Add(new System.Net.Http.Headers.MediaTypeWithQualityHeaderValue("application/json"));

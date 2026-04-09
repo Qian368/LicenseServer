@@ -36,6 +36,11 @@
     <EmbeddedResource Remove="许可证验证调用示例\**" />
     <None Remove="许可证验证调用示例\**" />
 
+    <Compile Remove="拓展：CertificatePinning.cs" />
+    <Content Remove="拓展：CertificatePinning.cs" />
+    <EmbeddedResource Remove="拓展：CertificatePinning.cs" />
+    <None Remove="拓展：CertificatePinning.cs" />
+
     <!-- 资源文件/文件夹自动复制 -->
     <!-- <None Update="pocketbase/**/*" CopyToOutputDirectory="PreserveNewest" /> -->
     <!-- 上面方式声明：发布（publish）的时候 可能被忽略、被过滤、被吃掉exe文件 -->
