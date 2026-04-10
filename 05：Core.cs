@@ -18,14 +18,116 @@ namespace LicenseServer
 {
     public partial class MainForm : Form
     {
-        #region 核心方法：验证前置方法
         private void WriteColor(string message, ConsoleColor color = ConsoleColor.White)
         {
             Console.ForegroundColor = color;
             Console.WriteLine($"[{DateTime.Now:HH:mm:ss}] {message}");
             Console.ResetColor();
         }
+        #region 数据库文件加密解密（复用授权文件加密逻辑）
+        // 数据库文件加密标识（用于判断加密状态）
+        private const string DB_ENCRYPT_FLAG = "DB_ENCRYPTED_V1:";
 
+        /// <summary>
+        /// 加密data.db文件（覆盖原文件）
+        /// </summary>
+        /// <param name="machineId">本机机器码（用于生成加密密钥）</param>
+        /// <param name="dbFilePath">数据库文件路径（_dataDbPath）</param>
+        /// <returns>是否加密成功</returns>
+        private bool EncryptDbFile(string machineId, string dbFilePath)
+        {
+            try
+            {
+                // 1. 检查文件是否存在
+                if (!File.Exists(dbFilePath))
+                {
+                    Debug.WriteLine("数据库文件不存在");
+                    return true;
+                }
+
+                // 【新增】先检查是否已加密（防止重复加密）
+                string existingContent = File.ReadAllText(dbFilePath, Encoding.UTF8);
+                if (existingContent.StartsWith(DB_ENCRYPT_FLAG))
+                {
+                    Debug.WriteLine("数据库文件已加密，无需重复加密");
+                    return true; // 已加密直接返回成功，避免重复操作
+                }
+
+                // 2. 读取数据库文件字节流
+                byte[] dbBytes = File.ReadAllBytes(dbFilePath);
+                // 转换为Base64字符串（二进制转文本，便于字符移位和AES处理）
+                string dbBase64 = Convert.ToBase64String(dbBytes);
+
+                // 3. 复用现有增强版加密逻辑（字符移位 + AES）
+                string encryptedContent = EncryptAesEnhanced(dbBase64, machineId);
+
+                // 【新增】拼接加密标识
+                string finalEncryptedContent = DB_ENCRYPT_FLAG + encryptedContent;
+
+                // 4. 覆盖写入加密后的内容（替换原db文件）
+                File.WriteAllText(dbFilePath, finalEncryptedContent, Encoding.UTF8);
+
+                Debug.WriteLine("数据库文件加密成功");
+                return true;
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"加密数据库文件失败：{ex.Message}");
+                return false;
+            }
+        }
+
+        /// <summary>
+        /// 解密data.db文件（覆盖原文件）
+        /// </summary>
+        /// <param name="machineId">本机机器码（用于生成解密密钥）</param>
+        /// <param name="dbFilePath">数据库文件路径（_dataDbPath）</param>
+        /// <returns>是否解密成功</returns>
+        private bool DecryptDbFile(string machineId, string dbFilePath)
+        {
+            try
+            {
+                // 1. 检查文件是否存在
+                if (!File.Exists(dbFilePath))
+                {
+                    Debug.WriteLine("数据库文件不存在");
+                    return true;
+                }
+
+                // 2. 读取加密后的文本内容
+                string encryptedContent = File.ReadAllText(dbFilePath, Encoding.UTF8);
+
+                // 【新增】校验加密标识
+                if (!encryptedContent.StartsWith(DB_ENCRYPT_FLAG))
+                {
+                    Debug.WriteLine("数据库文件无合法加密标识（未加密/已篡改/重复解密），解密失败");
+                    return true;
+                }
+
+                // 【新增】截取标识后的真实密文
+                string realEncryptedContent = encryptedContent.Substring(DB_ENCRYPT_FLAG.Length);
+
+                // 3. 复用现有增强版解密逻辑（AES + 字符移位还原）
+                string dbBase64 = DecryptAesEnhanced(realEncryptedContent, machineId);
+
+                // 4. Base64转回二进制字节流
+                byte[] dbBytes = Convert.FromBase64String(dbBase64);
+                // 5. 覆盖写入解密后的二进制数据（恢复原db文件）
+                File.WriteAllBytes(dbFilePath, dbBytes);
+
+                Debug.WriteLine("数据库文件解密成功");
+                return true;
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"解密数据库文件失败：{ex.Message}");
+                return false;
+            }
+        }
+        #endregion
+
+
+        #region 核心方法：验证前置方法
         private string? GetServerPid()
         {
             if (File.Exists(_lockFile))
@@ -59,6 +161,19 @@ namespace LicenseServer
 
             try
             {
+                // 获取机器ID
+                var machineResult = GetMachineId();
+                if (!machineResult.Success || string.IsNullOrEmpty(machineResult.MachineId))
+                {
+                    return (false, machineResult.Msg);
+                }
+                // 解密数据库文件
+                if (!DecryptDbFile(machineResult.MachineId, _dataDbPath))
+                {
+                    return (false, "数据库解密失败");
+                }
+
+                // 启动PocketBase服务
                 ProcessStartInfo psi = new ProcessStartInfo
                 {
                     FileName = _pbExePath,
@@ -105,8 +220,21 @@ namespace LicenseServer
             {
                 try
                 {
+                    // 信号停止服务
                     Process.GetProcessById(int.Parse(pid)).Kill();
                     File.Delete(_lockFile);
+
+                    // 获取机器ID
+                    var machineResult = GetMachineId();
+                    if (!machineResult.Success || string.IsNullOrEmpty(machineResult.MachineId))
+                    {
+                        return (false, machineResult.Msg);
+                    }
+                    // 加密数据库文件
+                    if (!EncryptDbFile(machineResult.MachineId, _dataDbPath))
+                    {
+                        return (false, "数据库加密失败");
+                    }
                     return (true, $"服务已停止（PID: {pid}）");
                 }
                 catch (Exception ex)

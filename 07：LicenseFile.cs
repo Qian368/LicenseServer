@@ -45,6 +45,8 @@ namespace LicenseServer
         }
 
         #region 新增：动态密钥生成（基于机器码）
+        // 加密文件标识（开头拼接，用于判断加密状态）
+        private const string ENCRYPT_FLAG = "LICENSE_ENCRYPTED_V1:";
         /// <summary>
         /// 基于机器码生成固定的签名密钥（32位）
         /// </summary>
@@ -296,8 +298,11 @@ namespace LicenseServer
                 string jsonModel = JsonConvert.SerializeObject(model);
                 string encryptContent = EncryptAesEnhanced(jsonModel, machineId);
 
+
+                // 【新增】拼接加密标识（核心修改）
+                string finalContent = ENCRYPT_FLAG + encryptContent;
                 // 写入文件
-                File.WriteAllText(LocalLicenseFilePath, encryptContent, Encoding.UTF8);
+                File.WriteAllText(LocalLicenseFilePath, finalContent, Encoding.UTF8);
                 return true;
             }
             catch (Exception ex)
@@ -322,8 +327,20 @@ namespace LicenseServer
 
             try
             {
-                // 2. 读取并增强版AES解密（动态密钥）
-                string encryptStr = File.ReadAllText(LocalLicenseFilePath, Encoding.UTF8);
+                string fileContent = File.ReadAllText(LocalLicenseFilePath, Encoding.UTF8);
+
+                // 【新增】第一步：校验加密标识
+                if (!fileContent.StartsWith(ENCRYPT_FLAG))
+                {
+                    // 无标识 → 不是合法加密文件（可能是明文/篡改/重复加密）
+                    File.Delete(LocalLicenseFilePath);
+                    return (false, "本地授权文件无合法加密标识（可能是明文/已篡改/重复加密），已自动清理");
+                }
+
+                // 【新增】第二步：截取标识后的真实密文
+                string encryptStr = fileContent.Substring(ENCRYPT_FLAG.Length);
+
+                // 【原有逻辑】解密（注意：这里用截取后的encryptStr，不是原fileContent）
                 string jsonStr = DecryptAesEnhanced(encryptStr, machineId);
                 LicenseFileModel model = JsonConvert.DeserializeObject<LicenseFileModel>(jsonStr)!;
 
@@ -399,8 +416,18 @@ namespace LicenseServer
                 {
                     return null;
                 }
-                // 增强版解密 + 反序列化
-                string encryptContent = File.ReadAllText(LocalLicenseFilePath, Encoding.UTF8);
+                string fileContent = File.ReadAllText(LocalLicenseFilePath, Encoding.UTF8);
+
+                // 【新增】校验加密标识
+                if (!fileContent.StartsWith(ENCRYPT_FLAG))
+                {
+                    Debug.WriteLine("授权文件无合法加密标识，判定为无效文件");
+                    return null;
+                }
+                // 【新增】截取真实密文
+                string encryptContent = fileContent.Substring(ENCRYPT_FLAG.Length);
+
+                // 【原有逻辑】解密+验证签名
                 string jsonModel = DecryptAesEnhanced(encryptContent, machineId);
                 LicenseFileModel model = JsonConvert.DeserializeObject<LicenseFileModel>(jsonModel)!;
 

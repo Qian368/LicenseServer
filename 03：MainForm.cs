@@ -19,6 +19,7 @@ namespace LicenseServer
 
             _dataDir = Path.Combine(_scriptDir, "pocketbase", "pb_data");   // 拼接数据目录路径
             _lockFile = Path.Combine(_scriptDir, "pocketbase", "server.pid");   // 拼接锁文件路径
+            _dataDbPath = Path.Combine(_dataDir, "data.db");   // 拼接数据数据库路径
         }
     }
 }

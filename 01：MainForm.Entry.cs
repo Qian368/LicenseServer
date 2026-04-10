@@ -39,6 +39,47 @@ namespace LicenseServer
             Application.SetCompatibleTextRenderingDefault(false);
 
             MainForm form = new MainForm();
+            // 默认隐藏主窗口,只影响form实例这个主窗口。（不影响输入窗口form实例的方法中的inputForm实例 和 弹窗）
+            form.Visible = false;   // 隐藏主窗口（可见性）
+            form.ShowInTaskbar = false; // 隐藏主窗口（任务栏）
+            form.Opacity = 0;   // 隐藏主窗口（透明度为0）
+            form.WindowState = FormWindowState.Minimized;   // 隐藏主窗口（最小化）
+
+            // ==========================================
+            // 规则1：无参数 → 直接退出
+            // ==========================================
+            if (args == null || args.Length == 0)
+            {
+                form.WriteColor("无启动参数，程序退出", ConsoleColor.Yellow);
+                Environment.Exit(0);
+            }
+
+            // ==========================================
+            // 规则2：只有精准匹配 -action 交互模式 才允许显示窗口
+            // ==========================================
+            bool isInteractiveMode = false;
+            for (int i = 0; i < args.Length; i++)
+            {
+                if (args[i].Equals("-action", StringComparison.OrdinalIgnoreCase) ||
+                    args[i].Equals("/action", StringComparison.OrdinalIgnoreCase))
+                {
+                    if (i + 1 < args.Length &&
+                        args[i + 1].Equals("交互模式", StringComparison.OrdinalIgnoreCase))
+                    {
+                        isInteractiveMode = true;
+                    }
+                    break;
+                }
+            }
+
+            // ==========================================
+            // 规则3：不是交互模式 → 强制隐藏（杜绝任何窗口弹出）
+            // ==========================================
+            if (!isInteractiveMode)
+            {
+                form.HideMainWindow();
+            }
+
 
             // ====== 新增：解析管道模式参数 ======
             for (int i = 0; i < args.Length; i++)
@@ -121,10 +162,7 @@ namespace LicenseServer
                     case "/silentmode":
                         form.silentMode = true;
                         // 解析到参数后，直接设置窗口隐藏属性
-                        form.Visible = false;
-                        form.ShowInTaskbar = false;
-                        form.Opacity = 0;
-                        form.WindowState = FormWindowState.Minimized;
+                        form.HideMainWindow();
                         break;
                 }
             }
@@ -139,13 +177,19 @@ namespace LicenseServer
                 // ====== 新增：管道模式处理（仅处理verify） ======
                 if (form._isPipeMode)
                 {
-                    form.HandlePipeVerifyMode(); // 处理管道验证
+                    form.HandlePipeVerifyMode(); // 处理管道验证模式
+                    exitCode = 0;
                     return; // 管道模式执行完直接退出，不走原有CLI逻辑
                 }
 
-                if (string.IsNullOrEmpty(form._action) || form._action == "交互模式")
+                // ==========================================
+                // 规则4：只有交互模式 → 显示窗口
+                // ==========================================
+                if (isInteractiveMode)
                 {
+                    form.ShowMainWindow();
                     Application.Run(form);
+                    exitCode = 0;
                     return;
                 }
 
@@ -200,10 +244,7 @@ namespace LicenseServer
                     // ====== 修改后的 case "verify" 分支 ======
                     case "verify":
                         // 验证模式隐藏主窗口,只影响form实例这个主窗口。（不影响输入窗口form实例的方法中的inputForm实例 和 弹窗）
-                        form.Visible = false;   // 隐藏主窗口（可见性）
-                        form.ShowInTaskbar = false; // 隐藏主窗口（任务栏）
-                        form.Opacity = 0;   // 隐藏主窗口（透明度为0）
-                        form.WindowState = FormWindowState.Minimized;   // 隐藏主窗口（最小化）
+                        form.HideMainWindow();
 
                         (bool Success, string Msg) verifyResult;
                         if (string.IsNullOrEmpty(form._licenseKey))     // 未指定许可证密钥
@@ -250,6 +291,9 @@ namespace LicenseServer
                 }
                 Environment.Exit(exitCode);
             }
+
+            form.WriteColor("启动参数错误，程序退出", ConsoleColor.Yellow);
+            Environment.Exit(0);
         }
         #endregion
     }

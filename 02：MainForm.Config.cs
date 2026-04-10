@@ -28,6 +28,7 @@ namespace LicenseServer
         private readonly string _pbExePath;
         private readonly string _dataDir;
         private readonly string _lockFile;
+        private readonly string _dataDbPath;
 
 
         // 初始化配置：默认端口8090
@@ -103,7 +104,6 @@ namespace LicenseServer
                 return Path.Combine(licenseDir, "license.lic");  // 返回完整授权文件路径
             }
         }
-
         #endregion
     }
 }

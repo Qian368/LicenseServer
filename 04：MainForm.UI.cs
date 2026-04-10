@@ -101,6 +101,20 @@ namespace LicenseServer
             // 新增：绑定窗体关闭事件，退出时停止服务
             this.FormClosing += MainForm_FormClosing;
         }
+        private void HideMainWindow()
+        {
+            Visible = false;    // 隐藏主窗口（可见性）
+            ShowInTaskbar = false; // 隐藏主窗口（任务栏）
+            Opacity = 0; // 隐藏主窗口（透明度为0） 
+            WindowState = FormWindowState.Minimized; // 隐藏主窗口（最小化）
+        }
+        private void ShowMainWindow()
+        {
+            Visible = true;
+            ShowInTaskbar = true;
+            Opacity = 1;
+            WindowState = FormWindowState.Normal;
+        }
 
         // 新增窗体关闭事件处理方法
         private void MainForm_FormClosing(object? sender, FormClosingEventArgs e)

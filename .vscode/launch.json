@@ -18,7 +18,10 @@
             "request": "launch",
             "preLaunchTask": "build-server",
             "program": "${workspaceFolder}/bin/Debug/net9.0-windows/LicenseServer.dll",
-            "args": [],
+            "args": [
+                "-action",
+                "交互模式"
+            ],
             "cwd": "${workspaceFolder}",
             "stopAtEntry": false,
             "console": "internalConsole"
