@@ -371,6 +371,76 @@ namespace LicenseServer
 
         #endregion
 
+        #region 真远程验证相关
+        /// <summary>
+        /// 判断 URL 是否指向【本地 8090 端口】（本机接口）
+        /// </summary>
+        private bool IsLocal8090Api(string url)
+        {
+            if (string.IsNullOrWhiteSpace(url))
+                return false;
+
+            try
+            {
+                var uri = new Uri(url.ToLower());
+                var host = uri.Host;
+                var port = uri.Port;
+
+                // 只判断：本地地址 + 端口 = 8090
+                bool isLocalHost = host == "localhost" || host == "127.0.0.1" || host == "::1" || host == "[::1]";
+                bool isPort8090 = port == 8090;
+
+                return isLocalHost && isPort8090;
+            }
+            catch
+            {
+                return false; // 无效 URL 按远程处理
+            }
+        }
+
+
+        /// <summary>
+        /// Base64解包 获取完整授权数据
+        /// </summary>
+        public static bool TryUnpackLicenseBase64(string base64Str, out LicenseFullData data)
+        {
+            data = new LicenseFullData();
+
+            try
+            {
+                // Base64解码
+                byte[] buf = Convert.FromBase64String(base64Str);
+                string plain = Encoding.UTF8.GetString(buf);
+
+                string[] parts = plain.Split(FieldSeparator);
+                if (parts.Length != 10)
+                    return false;
+
+                data.LicenseKey = parts[0];
+                data.MachineId = parts[1];
+                data.ComputerName = parts[2];
+                data.ExpiresAtDisplay = parts[3];
+
+                int.TryParse(parts[4], out int maxDev);
+                int.TryParse(parts[5], out int currDev);
+
+                data.LicenseMaxDevices = maxDev;
+                data.CurrentTotalDeviceCount = currDev;
+                data.RelatedDeviceNamesStr = parts[6];
+                data.MultiLicenseTip = parts[7];
+                data.ExpireWarnTip = parts[8];
+                data.AutoRecoverTip = parts[9];
+
+                return true;
+            }
+            catch
+            {
+                return false;
+            }
+        }
+        #endregion
+
+
         // ====== 新增：管道模式验证处理方法（完整实现） ======
         /// <summary>
         /// 处理匿名管道模式的许可证验证（仅verify，复用原有所有逻辑）
@@ -448,8 +518,19 @@ namespace LicenseServer
                     return JsonConvert.SerializeObject(new { Success = false, Msg = machineResult.Msg });
                 }
 
-                // 调用远程验证
-                var verifyResult = RemoteVerifyLicense(licenseKey, machineResult.MachineId!);
+                (bool Success, string Msg) verifyResult;
+                // 判断是否为远程验证
+                if (_verifyType == "remote" && !IsLocal8090Api(_ApiUrl))
+                {
+                    // 远程验证：直接调用API
+                    verifyResult = real_RemoteVerifyLicense(_ApiUrl, licenseKey, machineResult.MachineId);
+                }
+                else
+                {
+                    // 本地验证：直接调用本地服务
+                    verifyResult = RemoteVerifyLicense(licenseKey, machineResult.MachineId);
+                }
+
                 return JsonConvert.SerializeObject(new
                 {
                     Success = verifyResult.Success,

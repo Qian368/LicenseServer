@@ -303,10 +303,10 @@ namespace LicenseServer
         /// <returns>验证结果</returns>
         private (bool Success, string Msg) VerifyLicenseByKey(string licenseKey, string machineId)
         {
-            if (_verifyType == "remote")
+            if (_verifyType == "remote" && !IsLocal8090Api(RemoteApiUrl))
             {
                 // 远程验证：直接调用API
-                return RemoteVerifyLicense(licenseKey, machineId);
+                return real_RemoteVerifyLicense(RemoteApiUrl, licenseKey, machineId);
             }
             else
             {

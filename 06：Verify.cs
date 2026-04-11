@@ -82,6 +82,23 @@ namespace LicenseServer
         }
 
 
+        // 全局常量，服务端客户端一致
+        private const char FieldSeparator = '\u001F';   // 固定分隔符，不可见
+        public class LicenseFullData
+        {
+            public string LicenseKey { get; set; } = string.Empty;
+            public string MachineId { get; set; } = string.Empty;
+            public string ComputerName { get; set; } = string.Empty;
+            public string ExpiresAtDisplay { get; set; } = string.Empty;
+            public int LicenseMaxDevices { get; set; }
+            public int CurrentTotalDeviceCount { get; set; }
+            public string RelatedDeviceNamesStr { get; set; } = string.Empty;
+            public string MultiLicenseTip { get; set; } = string.Empty;
+            public string ExpireWarnTip { get; set; } = string.Empty;
+            public string AutoRecoverTip { get; set; } = string.Empty;
+        }
+
+
         /// <summary>
         /// 第一步：一次性拉取所有需要的远程数据（仅请求，无业务判断）
         /// </summary>
@@ -95,7 +112,7 @@ namespace LicenseServer
             };
 
 
-            // using (HttpClient client = SecureHttpClientFactory.CreateClientWithPublicKeyPinning(10))     // 使用自定义工厂创建安全的HttpClient
+            // using (HttpClient client = SecureHttpClientFactory.CreateClientWithPublicKeyPinning(10))     // 使用自定义工厂创建安全的HttpClient,会启用自动验证公钥是否匹配的功能
             // var handler = new SimplePublicKeyPinningHandler();   // 直接创建带公钥锁定的Handler（只要这一步，验证就会生效），后续正常创建HttpClient即可
             using (HttpClient client = new HttpClient { Timeout = TimeSpan.FromSeconds(10) })
             {
@@ -657,10 +674,6 @@ namespace LicenseServer
             {
                 return (false, "机器码为空，无法验证");
             }
-
-
-
-
             try
             {
                 // ========== 第一步：一次性拉取所有数据（仅请求） ==========
@@ -693,8 +706,6 @@ namespace LicenseServer
                 return (false, "机器码为空，无法验证");
             }
 
-
-
             // 2. 启动本地验证服务（原有逻辑保留）
             var startResult = StartServer();
             if (!startResult.Success)
@@ -712,6 +723,132 @@ namespace LicenseServer
         }
 
 
+        /// <summary>
+        /// 远程验证许可证（核心底层函数，不启动本地服务）
+        /// </summary>
+        /// <param name="key">许可证密钥</param>
+        /// <param name="machineId">本机机器码（外部传入，避免重复计算）</param>
+        /// <returns>验证结果</returns>
+        internal (bool Success, string Msg) real_RemoteVerifyLicense(string real_RemoteApiUrl, string key, string machineId)
+        {
+            // 远程验证：直接调用API
+            try
+            {
+                // using (HttpClient client = SecureHttpClientFactory.CreateClientWithPublicKeyPinning(10))     // 使用自定义工厂创建安全的HttpClient,会启用自动验证公钥是否匹配的功能
+                using (HttpClient client = new HttpClient { Timeout = TimeSpan.FromSeconds(10) })
+                {
+                    // 构建请求体数据（完全不变）
+                    var postData = new Dictionary<string, string>
+                    {
+                        ["key"] = key,
+                        ["machineId"] = machineId
+                    };
+
+                    // 序列化JSON（完全不变）
+                    string jsonContent = Newtonsoft.Json.JsonConvert.SerializeObject(postData);
+                    var content = new StringContent(jsonContent, Encoding.UTF8, "application/json");
+
+                    // 构建URL（完全不变）
+                    string remoteVerifyUrl = $"{real_RemoteApiUrl.TrimEnd('/')}/api/license/verify";
+
+                    // 修复：同步调用异步，避免死锁
+                    HttpResponseMessage response = client.PostAsync(remoteVerifyUrl, content).GetAwaiter().GetResult();
+
+                    if (response.IsSuccessStatusCode)
+                    {
+                        // 修复：同步调用异步，避免死锁
+                        string responseContent = response.Content.ReadAsStringAsync().GetAwaiter().GetResult();
+
+                        dynamic? responseData = Newtonsoft.Json.JsonConvert.DeserializeObject(responseContent);
+
+                        if (responseData != null)
+                        {
+                            // ==============================================
+                            // 【加密版核心改动】
+                            // 1. 获取加密的 data 字段
+                            // ==============================================
+                            string encryptedData = responseData.data?.ToString();
+                            if (string.IsNullOrEmpty(encryptedData))
+                            {
+                                return (false, "服务器返回无效数据");
+                            }
+
+                            // ==============================================
+                            // 2. 解密得到原始的 { success, msg }
+                            // ==============================================
+                            string decryptedJson = AesHelper.Decrypt(encryptedData, machineId);
+                            if (decryptedJson == null)
+                            {
+                                return (false, "授权数据被篡改或非法请求");
+                            }
+
+                            // ==============================================
+                            // 3. 解析回原始结构（你原来的逻辑完全不变）
+                            // ==============================================
+                            dynamic? result = Newtonsoft.Json.JsonConvert.DeserializeObject(decryptedJson);
+                            if (result == null)
+                            {
+                                return (false, "解析服务器响应失败");
+                            }
+
+                            // ==================== 以下完全是你原来的代码 ====================
+                            bool success = result.success ?? false;
+                            string msg = result.msg?.ToString() ?? "未返回消息";
+
+                            if (success && TryUnpackLicenseBase64(msg, out var d))
+                            {
+                                // 生成本地授权文件
+                                GenerateLicenseFile(
+                                    d.LicenseKey,
+                                    d.MachineId,
+                                    d.ExpiresAtDisplay,
+                                    d.LicenseMaxDevices,
+                                    d.CurrentTotalDeviceCount,
+                                    d.RelatedDeviceNamesStr);
+
+                                // 客户端自行拼接展示文案，和你原来一模一样
+                                string showMsg = $"验证通过！\n" +
+                                $"许可证key：{d.LicenseKey}\n" +
+                                $"机器码：{d.MachineId}\n" +
+                                $"用户：{d.ComputerName}\n" +
+                                $"有效期：{d.ExpiresAtDisplay}\n" +
+                                $"当前许可证绑定设备：{d.CurrentTotalDeviceCount}/{d.LicenseMaxDevices}\n" +
+                                $"关联设备列表：{d.RelatedDeviceNamesStr}\n" +
+                                $"{d.MultiLicenseTip}{d.ExpireWarnTip}{d.AutoRecoverTip}";
+
+                                // 需要展示就用 showMsg
+                                return (success, showMsg);
+                            }
+                            else
+                            {
+                                return (success, msg);
+                            }
+                        }
+                        else
+                        {
+                            return (false, "解析服务器响应失败");
+                        }
+                    }
+                    else
+                    {
+                        return (false, $"服务器返回错误: {response.StatusCode}");
+                    }
+                }
+            }
+            catch (TaskCanceledException ex)
+            {
+                return (false, $"请求超时: {ex.Message}");
+            }
+            catch (HttpRequestException ex)
+            {
+                return (false, $"网络请求失败: {ex.Message}");
+            }
+            catch (Exception ex)
+            {
+                return (false, $"验证过程出错: {ex.Message}");
+            }
+
+        }
 
         #endregion
 

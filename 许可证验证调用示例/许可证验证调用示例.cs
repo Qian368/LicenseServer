@@ -96,10 +96,10 @@ namespace LicenseServer.Caller
                 // --------------------------
                 var verifyRequest = new PipeCommunication.VerifyRequest
                 {
-                    VerifyType = "local",           // 必选：local / remote
-                    ApiUrl = "http://127.0.0.1:8090",  // 可选：默认为："http://127.0.0.1:8090"
-                    LicenseKey = "",  // 可选；默认为空字符串，未填则弹窗提示输入
-                    AppName = "MyApp"  // 可选；默认为："AppName"
+                    VerifyType = "remote",           // 必选：local / remote
+                    ApiUrl = "http://localhost:5077",  // 可选：默认为："http://127.0.0.1:8090"
+                    LicenseKey = "222",  // 可选；默认为空字符串，未填则弹窗提示输入
+                    AppName = "qian368"  // 可选；默认为："AppName"
                 };
 
                 // --------------------------
@@ -171,11 +171,11 @@ namespace LicenseServer.Caller
 
                 if (verifyResult.Success)
                 {
-                    Console.WriteLine($"验证成功，许可证有效 \n 欢迎使用主程序！");
+                    Console.WriteLine($"验证成功: 欢迎使用主程序！");
                 }
                 else
                 {
-                    Console.WriteLine($"验证失败，许可证无效 \n 请检查许可证密钥是否正确。");
+                    Console.WriteLine($"验证失败: 失败原因详见上述提示信息！");
                     process.WaitForExit();  // 等待子程序退出
                     Console.WriteLine("\n程序执行完毕，按任意键退出...");
                 }
