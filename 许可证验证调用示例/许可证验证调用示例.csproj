@@ -1,47 +1,54 @@
 <Project Sdk="Microsoft.NET.Sdk">
-<PropertyGroup>
-  <GenerateAssemblyInfo>false</GenerateAssemblyInfo> <!-- 禁止生成 AssemblyInfo.cs -->
-</PropertyGroup>
-  <PropertyGroup Condition="'$(Configuration)' == 'Release'">
-    <!-- 仅在 Release 模式下关闭 PDB 调试文件和开启优化 -->
-    <DebugSymbols>false</DebugSymbols>
-    <DebugType>none</DebugType>
-    <Optimize>true</Optimize>
-  </PropertyGroup>
 
-  <!-- 基础配置：指定框架版本（根据你的实际环境调整，比如 net6.0/net7.0/net48 等） -->
+  <!-- 编译基础配置 -->
   <PropertyGroup>
-    <OutputType>Exe</OutputType> <!-- 控制台应用，生成EXE -->
-    <TargetFramework>net9.0-windows</TargetFramework> <!-- 替换为你实际使用的框架版本 -->
+    <OutputType>exe</OutputType>
+    <TargetFramework>net9.0-windows</TargetFramework>
     <PlatformTarget>AnyCPU</PlatformTarget>
-    <RootNamespace>LicenseServer.Caller</RootNamespace>
-    <AssemblyName>LicenseServerCaller</AssemblyName> <!-- 生成的程序集名称 -->
-    <!-- <OutputPath>./publish</OutputPath> --> <!-- 输出目录（可选，和示例中调用的子程序路径对应） -->
-    <Nullable>disable</Nullable> <!-- 关闭可空引用（避免示例代码报错） -->
-    <ImplicitUsings>enable</ImplicitUsings>
+    <UseWindowsForms>true</UseWindowsForms>
+    <NoWarn>$(NoWarn);CA1416;CS8632;CS0168</NoWarn>
+    <Configuration>Release</Configuration>
+    <SelfContained>true</SelfContained>
+    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+    <GenerateAssemblyInfo>false</GenerateAssemblyInfo> <!-- 禁止生成 AssemblyInfo.cs -->
     <EnableDefaultCompileItems>false</EnableDefaultCompileItems> <!-- 禁止用默认的编译项 -->
   </PropertyGroup>
 
-  <!-- 依赖项：示例中用到的 Newtonsoft.Json -->
+  <!-- 语法检查 -->
+  <PropertyGroup>
+    <Nullable>disable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+  </PropertyGroup>
+
+  <!-- 瘦身核心配置 -->
+  <PropertyGroup Condition="'$(Configuration)' == 'Release'">
+    <DebugSymbols>false</DebugSymbols>
+    <DebugType>none</DebugType>
+    <Optimize>true</Optimize>
+    <InvariantGlobalization>true</InvariantGlobalization>
+    <PublishSingleFile>true</PublishSingleFile>
+    <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
+    <EnableCompressionInSingleFile>true</EnableCompressionInSingleFile>
+    <PublishReadyToRun>false</PublishReadyToRun>
+    <EnableUnsafeBinaryFormatterSerialization>false</EnableUnsafeBinaryFormatterSerialization>
+  </PropertyGroup>
+
+  <!-- 引用的 NuGet 包 和 指定编译的文件 -->
   <ItemGroup>
     <PackageReference Include="Newtonsoft.Json" Version="13.0.3" /> <!-- 版本可按需调整 -->
-  </ItemGroup>
 
   <!-- 指定要编译的单个CS文件（相对路径） -->
-  <ItemGroup>
     <Compile Include="许可证验证调用示例.cs" />
   </ItemGroup>
 
-  <!-- 可选：如果需要复制子程序（LicenseServer.exe）到输出目录 -->
-<!-- 自动拷贝 LicenseServer 发布产物到当前项目输出目录的 LicenseServer 文件夹 -->
-<ItemGroup>
-  <!-- 递归拷贝 publish 目录下所有文件 -->
-  <Content Include="../bin/Release/net9.0-windows/publish/**/*.*">
-    <!-- 仅拷贝新文件，避免重复复制 -->
-    <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    <!-- 核心：指定拷贝到输出目录的 LicenseServer 文件夹（保留原目录结构） -->
-    <Link>LicenseServer/%(RecursiveDir)%(FileName)%(Extension)</Link>
-  </Content>
-</ItemGroup>
+  <!-- 自动拷贝 LicenseServer 发布产物到当前项目 publish 根目录 -->
+  <Target Name="CopyPocketBaseToPublish" AfterTargets="Publish">
+    <ItemGroup>
+      <PocketBaseFiles Include="../bin/Release/net9.0-windows/win-x64/publish/**/*.*"/>
+    </ItemGroup>
+    <Copy SourceFiles="@(PocketBaseFiles)"
+          DestinationFiles="@(PocketBaseFiles->'$(PublishDir)\LicenseServer\%(RecursiveDir)%(Filename)%(Extension)')"
+          SkipUnchangedFiles="true" />
+  </Target>
 
 </Project>

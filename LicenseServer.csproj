@@ -1,56 +1,62 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
-<PropertyGroup>
-  <GenerateAssemblyInfo>false</GenerateAssemblyInfo> <!-- 禁止生成 AssemblyInfo.cs -->
-</PropertyGroup>
 
-  <PropertyGroup Condition="'$(Configuration)' == 'Release'">
-    <!-- 仅在 Release 模式下关闭 PDB 调试文件和开启优化 -->
-    <DebugSymbols>false</DebugSymbols>
-    <DebugType>none</DebugType>
-    <Optimize>true</Optimize>
-  </PropertyGroup>
-
+  <!-- 编译基础配置 -->
   <PropertyGroup>
-    <!-- <OutputType>winexe</OutputType> -->
-    <OutputType>winexe</OutputType>
+    <OutputType>exe</OutputType>
     <TargetFramework>net9.0-windows</TargetFramework>
     <PlatformTarget>AnyCPU</PlatformTarget>
     <UseWindowsForms>true</UseWindowsForms>
     <NoWarn>$(NoWarn);CA1416;CS8632;CS0168</NoWarn>
+    <Configuration>Release</Configuration>
+    <SelfContained>true</SelfContained>
+    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+    <GenerateAssemblyInfo>false</GenerateAssemblyInfo> <!-- 禁止生成 AssemblyInfo.cs -->
+  </PropertyGroup>
+
+  <!-- 语法检查 -->
+  <PropertyGroup>
     <Nullable>disable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
+  </PropertyGroup>
 
-    <!-- .NET 8/9 需显式启用，.NET 6/7 默认开启但建议显式声明 --> 
-    <EnableWindowsFormsConsoleSupport>false</EnableWindowsFormsConsoleSupport>
-    <!-- 排除不必要的WinForms组件 -->
+  <!-- 瘦身核心配置 -->
+  <PropertyGroup Condition="'$(Configuration)' == 'Release'">
+    <DebugSymbols>false</DebugSymbols>
+    <DebugType>none</DebugType>
+    <Optimize>true</Optimize>
+    <InvariantGlobalization>true</InvariantGlobalization>
+    <PublishSingleFile>true</PublishSingleFile>
+    <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
+    <EnableCompressionInSingleFile>true</EnableCompressionInSingleFile>
     <PublishReadyToRun>false</PublishReadyToRun>
     <EnableUnsafeBinaryFormatterSerialization>false</EnableUnsafeBinaryFormatterSerialization>
   </PropertyGroup>
 
+  <!-- 引用的 NuGet 包 和 移除编译的文件 -->
   <ItemGroup>
     <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
     <PackageReference Include="System.Management" Version="8.0.0" />
+
     <!-- 排除调用示例文件夹下的所有文件，避免子项目的obj/bin目录污染当前项目 -->
     <Compile Remove="许可证验证调用示例\**" />
     <Content Remove="许可证验证调用示例\**" />
     <EmbeddedResource Remove="许可证验证调用示例\**" />
     <None Remove="许可证验证调用示例\**" />
-
+    
     <Compile Remove="拓展：CertificatePinning.cs" />
     <Content Remove="拓展：CertificatePinning.cs" />
     <EmbeddedResource Remove="拓展：CertificatePinning.cs" />
     <None Remove="拓展：CertificatePinning.cs" />
-
-    <!-- 资源文件/文件夹自动复制 -->
-    <!-- <None Update="pocketbase/**/*" CopyToOutputDirectory="PreserveNewest" /> -->
-    <!-- 上面方式声明：发布（publish）的时候 可能被忽略、被过滤、被吃掉exe文件 -->
-    <!-- 强制复制 pocketbase 文件夹 -->
-    <Content Include="pocketbase\**\*">
-      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-      <!-- 不让单文件打包把这个exe排除 -->
-      <PublishSingleFile>true</PublishSingleFile>
-    </Content>
   </ItemGroup>
+
+  <!-- 强制把 pocketbase 文件夹复制到 publish 根目录（解决单文件发布不拷贝问题） -->
+  <Target Name="CopyPocketBaseToPublish" AfterTargets="Publish">
+    <ItemGroup>
+      <PocketBaseFiles Include="pocketbase\**\*" />
+    </ItemGroup>
+    <Copy SourceFiles="@(PocketBaseFiles)"
+          DestinationFiles="@(PocketBaseFiles->'$(PublishDir)\pocketbase\%(RecursiveDir)%(Filename)%(Extension)')"
+          SkipUnchangedFiles="true" />
+  </Target>
 
 </Project>
