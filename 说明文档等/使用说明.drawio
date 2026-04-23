@@ -1,0 +1,75 @@
+<mxfile host="Electron" agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) draw.io/29.2.9 Chrome/140.0.7339.249 Electron/38.7.2 Safari/537.36" version="29.2.9">
+  <diagram name="第 1 页" id="boqCT9k69ASh-VNRmLR6">
+    <mxGraphModel dx="1426" dy="849" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="827" pageHeight="1169" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="hOO9bak7ntcgamJbZj2V-4" edge="1" parent="1" source="hOO9bak7ntcgamJbZj2V-2" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;" target="hOO9bak7ntcgamJbZj2V-3" value="">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="hOO9bak7ntcgamJbZj2V-16" edge="1" parent="1" source="hOO9bak7ntcgamJbZj2V-2" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;" target="hOO9bak7ntcgamJbZj2V-15" value="">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="hOO9bak7ntcgamJbZj2V-2" parent="1" style="rhombus;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;" value="本地部署验证 /&amp;nbsp;&lt;br&gt;远程部署验证" vertex="1">
+          <mxGeometry height="110" width="110" x="346.75" y="180" as="geometry" />
+        </mxCell>
+        <mxCell id="hOO9bak7ntcgamJbZj2V-6" edge="1" parent="1" source="hOO9bak7ntcgamJbZj2V-3" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;" target="hOO9bak7ntcgamJbZj2V-5" value="">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="hOO9bak7ntcgamJbZj2V-3" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;" value="本地验证" vertex="1">
+          <mxGeometry height="60" width="120" x="169.25" y="340" as="geometry" />
+        </mxCell>
+        <mxCell id="hOO9bak7ntcgamJbZj2V-8" edge="1" parent="1" source="hOO9bak7ntcgamJbZj2V-5" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;" target="hOO9bak7ntcgamJbZj2V-7" value="">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="hOO9bak7ntcgamJbZj2V-5" parent="1" style="whiteSpace=wrap;html=1;rounded=1;fillColor=#e1d5e7;strokeColor=#9673a6;" value="需部署：&lt;br&gt;LicenseServer.exe +&lt;br&gt;pocketbase文件夹&lt;br&gt;（详release）" vertex="1">
+          <mxGeometry height="60" width="149.25" x="154.63" y="440" as="geometry" />
+        </mxCell>
+        <mxCell id="hOO9bak7ntcgamJbZj2V-10" edge="1" parent="1" source="hOO9bak7ntcgamJbZj2V-7" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;" target="hOO9bak7ntcgamJbZj2V-9" value="">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="hOO9bak7ntcgamJbZj2V-7" parent="1" style="whiteSpace=wrap;html=1;rounded=1;fillColor=#e1d5e7;strokeColor=#9673a6;" value="命令行启动验证服务：&lt;br style=&quot;font-size: 11px; text-wrap-mode: nowrap;&quot;&gt;&lt;span style=&quot;font-size: 11px; text-wrap-mode: nowrap; background-color: rgb(255, 255, 255);&quot;&gt;`.\LicenseServer.exe -action 交互模式`&lt;/span&gt;" vertex="1">
+          <mxGeometry height="60" width="191" x="133.75" y="540" as="geometry" />
+        </mxCell>
+        <mxCell id="hOO9bak7ntcgamJbZj2V-12" edge="1" parent="1" source="hOO9bak7ntcgamJbZj2V-9" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;" target="hOO9bak7ntcgamJbZj2V-11" value="">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="hOO9bak7ntcgamJbZj2V-9" parent="1" style="whiteSpace=wrap;html=1;rounded=1;fillColor=#e1d5e7;strokeColor=#9673a6;" value="启动pocketbase后，自动解密SQLite数据库文件" vertex="1">
+          <mxGeometry height="60" width="120" x="169.25" y="640" as="geometry" />
+        </mxCell>
+        <mxCell id="hOO9bak7ntcgamJbZj2V-14" edge="1" parent="1" source="hOO9bak7ntcgamJbZj2V-11" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;" target="hOO9bak7ntcgamJbZj2V-13" value="">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="hOO9bak7ntcgamJbZj2V-11" parent="1" style="whiteSpace=wrap;html=1;rounded=1;fillColor=#e1d5e7;strokeColor=#9673a6;" value="第三方数据库客户端批量录入许可证" vertex="1">
+          <mxGeometry height="60" width="120" x="169.25" y="730" as="geometry" />
+        </mxCell>
+        <mxCell id="hOO9bak7ntcgamJbZj2V-13" parent="1" style="whiteSpace=wrap;html=1;rounded=1;fillColor=#e1d5e7;strokeColor=#9673a6;" value="主程序通过匿名管道启动验证程序&lt;br&gt;(详:许可证验证调用示例.cs)" vertex="1">
+          <mxGeometry height="50" width="206.5" x="126" y="820" as="geometry" />
+        </mxCell>
+        <mxCell id="hOO9bak7ntcgamJbZj2V-18" edge="1" parent="1" source="hOO9bak7ntcgamJbZj2V-15" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;" target="hOO9bak7ntcgamJbZj2V-17" value="">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="hOO9bak7ntcgamJbZj2V-15" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;" value="远程验证" vertex="1">
+          <mxGeometry height="60" width="120" x="528.5" y="340" as="geometry" />
+        </mxCell>
+        <mxCell id="hOO9bak7ntcgamJbZj2V-20" edge="1" parent="1" source="hOO9bak7ntcgamJbZj2V-17" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;" target="hOO9bak7ntcgamJbZj2V-19" value="">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="hOO9bak7ntcgamJbZj2V-17" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;" value="本地仅需部署：&lt;br&gt;LicenseServer.exe&lt;br&gt;（详release）" vertex="1">
+          <mxGeometry height="60" width="120" x="528.5" y="440" as="geometry" />
+        </mxCell>
+        <mxCell id="hOO9bak7ntcgamJbZj2V-22" edge="1" parent="1" source="hOO9bak7ntcgamJbZj2V-19" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;entryX=0.5;entryY=0;entryDx=0;entryDy=0;fillColor=#e1d5e7;strokeColor=#9673a6;" target="hOO9bak7ntcgamJbZj2V-23" value="">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="438.5" y="600" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="hOO9bak7ntcgamJbZj2V-19" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;" value="服务端部署：LicenseValidationApi项目（API项目路径详见：&lt;a href=&quot;https://github.com/Qian368/LicenseValidationApi&quot;&gt;Qian368/LicenseValidationApi&lt;/a&gt;）" vertex="1">
+          <mxGeometry height="60" width="223.75" x="476.63" y="540" as="geometry" />
+        </mxCell>
+        <mxCell id="hOO9bak7ntcgamJbZj2V-23" parent="1" style="whiteSpace=wrap;html=1;rounded=1;fillColor=#e1d5e7;strokeColor=#9673a6;" value="主程序通过匿名管道启动验证程序&lt;br&gt;(详:许可证验证调用示例.cs)" vertex="1">
+          <mxGeometry height="50" width="206.5" x="485.25" y="640" as="geometry" />
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

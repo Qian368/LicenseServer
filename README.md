@@ -12,22 +12,11 @@ dotnet add package Newtonsoft.Json
 dotnet add package System.Management
 
 ### 3、打包项目
-- 打开项目文件夹，使用以下命令打包项目：
+- 本项目已优化配置好csproj文件，无需额外配置。打开项目文件夹，直接使用以下命令打包项目：
 ```
-dotnet publish -c Release -r win-x64 --self-contained true /p:PublishSingleFile=true /p:IncludeNativeLibrariesForSelfExtract=true
+dotnet publish 
 ```
-- `.NET` 发布命令的详细参数解释
-
-| 参数 | 作用 | 效果与解释 |
-| :--- | :--- | :--- |
-| **`-c Release`** | 指定构建配置。 | 使用**发布模式**进行编译和优化，生成更小、更快、适合生产环境的程序。 |
-| **`-r win-x64`** | 指定目标运行时。 | 为**64位Windows操作系统**生成原生可执行文件，应用程序将在此特定平台上运行。 |
-| **`--self-contained true`** | 启用自包含部署。 | 将**.NET运行时**与应用程序一起打包。最终程序可以在**没有安装.NET的机器**上独立运行，但体积较大。 |
-| **`/p:PublishSingleFile=true`** | 启用单文件发布。 | 将所有依赖的DLL、资源等**打包成一个单独的.exe文件**，使分发和部署非常简洁。 |
-| **`/p:IncludeNativeLibrariesForSelfExtract=true`** | 包含本机库用于自解压。 | 确保应用程序所需的**本机依赖库**也被打包进单文件中，避免运行时因缺少本机组件而失败。 |
-- 打包完成后，在 `bin/Release/net6.0/win-x64/publish` 目录下即可找到 `LicenseServer.exe`（自包含单文件）。
-**最终生成物**：一个可在任何 64 位 Windows 系统上直接运行的、独立的 `.exe` 文件。
-
+**最终生成物**：一个可在任何 64 位 Windows 系统上直接运行的、独立的 `.exe` 文件（控制台应用）。
 
 # LicenseServer 许可证验证工具
 
@@ -35,6 +24,13 @@ dotnet publish -c Release -r win-x64 --self-contained true /p:PublishSingleFile=
 LicenseServer 是一个基于 .NET Windows Forms 开发的桌面/控制台应用程序，核心功能是实现硬件绑定的许可证验证与管理。
 它支持两种验证模式：启动内置的 PocketBase 服务进行本地验证，或连接到指定的远程 API 服务进行远程验证。
 旨在帮你完成复杂的验证逻辑，适配任何本地应用。程序可通过命令行参数无界面运行，同时也提供了图形化界面（GUI）供手动操作，并对外提供了可供其他应用程序调用的验证 API。
+
+## 使用说明
+
+- **服务端API项目地址：**[https://github.com/Qian368/LicenseValidationApi](https://github.com/Qian368/LicenseValidationApi)
+- 具体流程详见下图：
+
+![alt text](说明文档等/使用说明.png)
 
 ## 核心功能
 
